@@ -1,0 +1,5 @@
+let nums = [1, 2, 3];
+let double = def(x) { return x * 2; };
+let doubled = map(nums, double);
+print(doubled);  // expect [2, 4, 6]
+

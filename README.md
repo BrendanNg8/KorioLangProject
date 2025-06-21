@@ -3,7 +3,6 @@
 
 ## 🧠 General Syntax Rules
 
-* Statements end with a **semicolon** `;`.
 * Blocks are enclosed in **curly braces** `{ ... }`.
 * Identifiers follow standard naming conventions (letters, numbers, underscores).
 * Supports **single-line** (`// ...`) and **multi-line comments** (`/* ... */`).

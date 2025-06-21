@@ -1,0 +1,164 @@
+## Concept/Idea
+Korio is a programming language inspired by Python's ease of use, Javascripts features, and Java's readibility. This language was created to be a hybrid language, incorporating ideas from these 3 languages.
+---
+
+## 🧠 General Syntax Rules
+
+* Blocks are enclosed in **curly braces** `{ ... }`.
+* Identifiers follow standard naming conventions (letters, numbers, underscores).
+* Supports **single-line** (`// ...`) and **multi-line comments** (`/* ... */`).
+
+---
+
+## 📌 Variable Declaration
+
+```ts
+let x = 10;
+let name = "John";
+```
+
+---
+
+## 📘 Data Types
+
+* **number**: `1`, `42`, `3.14`
+* **string**: "hello"
+* **list**: `[1, 2, 3]`
+* **null**: returned by default in some built-in functions
+
+---
+
+## 🧮 Expressions
+
+```ts
+let result = (1 + 2) * 3;
+let valid = 5 == 5;
+```
+
+* Operators supported: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `>`, `<=`, `>=`
+
+---
+
+## 🧠 Function Declaration
+
+```ts
+def add(a, b) {
+  return a + b;
+}
+
+print(add(2, 3)); // Outputs: 5
+```
+
+---
+
+## 🧩 Function Expression (Anonymous Function)
+
+```ts
+let f = def(x) {
+  return x * x;
+};
+
+print(f(5)); // Outputs: 25
+```
+
+---
+
+## 🔁 Control Flow
+
+### If Statement
+
+```ts
+if (x > 0) {
+  print("positive");
+} else {
+  print("non-positive");
+}
+```
+
+### While Loop
+
+```ts
+let i = 0;
+while (i < 5) {
+  print(i);
+  i = i + 1;
+}
+```
+
+### For Loop
+
+```ts
+for i in range(0, 5) {
+  print(i);
+}
+```
+
+* `range(start, end)` generates a list from start to end-1.
+
+---
+
+## 🧰 Built-in Functions
+
+### print(...args)
+
+```ts
+print("Hello", 123);
+```
+
+### len(list)
+
+```ts
+print(len([1, 2, 3])); // 3
+```
+
+### sum(list)
+
+```ts
+print(sum([1, 2, 3])); // 6
+```
+
+### range(start, end)
+
+```ts
+print(range(0, 3)); // [0, 1, 2]
+```
+
+### map(list, func)
+
+```ts
+let square = def(x) {
+  return x * x;
+};
+print(map([1, 2, 3], square)); // [1, 4, 9]
+```
+
+### filter(list, func)
+
+```ts
+let isEven = def(x) {
+  return x % 2 == 0;
+};
+print(filter([1, 2, 3, 4], isEven)); // [2, 4]
+```
+
+---
+
+## 🧪 Sample Program
+
+```ts
+let numbers = range(1, 6);
+let square = def(x) {
+  return x * x;
+};
+let squares = map(numbers, square);
+print(squares); // [1, 4, 9, 16, 25]
+```
+
+---
+
+## 🛠 Debugging
+
+* Runtime errors will display clearly if parsing or evaluation fails.
+* Ensure all blocks use `{}` and statements end with `;`.
+
+---

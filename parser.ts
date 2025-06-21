@@ -19,6 +19,7 @@ import {
   WhileStatement,
   ForStatement,
   FunctionExpression,
+  tokenize,
 } from "./ast.ts";
 
 export class Parser {
@@ -52,7 +53,11 @@ export class Parser {
     };
 
     while (this.at().type !== TokenType.EOF) {
-      program.body.push(this.parseStatement());
+      const stmt = this.parseStatement();
+      program.body.push(stmt);
+
+      // OPTIONAL: skip trailing semicolon if user puts one
+      if (this.at().type === TokenType.Semicolon) this.eat();
     }
 
     return program;
@@ -87,7 +92,6 @@ export class Parser {
     ).value;
     this.expect(TokenType.Equals, "Expected '=' after identifier");
     const value = this.parseExpression();
-    this.expect(TokenType.Semicolon, "Expected ';' after variable declaration");
     return {
       kind: "VarDeclaration",
       identifier,
@@ -143,7 +147,6 @@ export class Parser {
   private parseReturnStatement(): ReturnStatement {
     this.eat(); // 'return'
     const value = this.parseExpression();
-    this.expect(TokenType.Semicolon, "Expected ';' after return statement");
     return {
       kind: "ReturnStatement",
       value,
@@ -184,8 +187,13 @@ export class Parser {
   private parseBlockStatement(): BlockStatement {
     this.expect(TokenType.OpenBrace, "Expected '{'");
     const body: Statement[] = [];
-    while (this.at().type !== TokenType.CloseBrace) {
-      body.push(this.parseStatement());
+    while (
+      this.at().type !== TokenType.CloseBrace &&
+      this.at().type !== TokenType.EOF
+    ) {
+      const stmt = this.parseStatement();
+      body.push(stmt);
+      if (this.at().type === TokenType.Semicolon) this.eat(); // optional
     }
     this.expect(TokenType.CloseBrace, "Expected '}'");
     return { kind: "Block", body };
@@ -193,7 +201,6 @@ export class Parser {
 
   private parseExpressionStatement(): ExpressionStatement {
     const expr = this.parseExpression();
-    this.expect(TokenType.Semicolon, "Expected ';'");
     return { kind: "ExpressionStatement", expression: expr };
   }
 
@@ -207,12 +214,12 @@ export class Parser {
 
   private parseEquality(): Expression {
     let left = this.parseComparison();
-    return left; // TODO: Add == and != if needed
+    return left;
   }
 
   private parseComparison(): Expression {
     let left = this.parseAdditive();
-    return left; // TODO: Add comparison ops if needed
+    return left;
   }
 
   private parseAdditive(): Expression {
@@ -319,5 +326,3 @@ export function produceAST(sourceCode: string): Program {
   const parser = new Parser(tokens);
   return parser.produceAST();
 }
-
-import { tokenize } from "./ast.ts";

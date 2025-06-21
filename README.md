@@ -1,4 +1,5 @@
-
+## Concept/Idea
+Korio is a programming language inspired by Python's ease of use, Javascripts features, and Java's readibility. This language was created to be a hybrid language, incorporating ideas from these 3 languages.
 ---
 
 ## 🧠 General Syntax Rules

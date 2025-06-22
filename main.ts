@@ -457,3 +457,4 @@ if (import.meta.main) {
 }
 
 //deno run --allow-read main.ts
+//deno run --allow-read main.ts test.txt

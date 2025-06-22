@@ -76,10 +76,8 @@ export default class Parser {
   }
 
   private parseVarDeclaration(): VarDeclaration {
-    // previous() is Let or Final
     const isFinal = this.previous().type === TokenType.Final;
     let varType: string | undefined = undefined;
-    // Optional type annotation before identifier
     if (this.check(TokenType.Identifier)) {
       const peekVal = this.peek().value;
       if (
@@ -108,7 +106,6 @@ export default class Parser {
   }
 
   private parseFunctionDeclaration(): FunctionDeclaration {
-    // previous() was 'def'
     const nameToken = this.consume(
       TokenType.Identifier,
       "Expected function name"
@@ -120,16 +117,19 @@ export default class Parser {
   }
 
   private parseReturnStatement(): ReturnStatement {
-    // previous() was 'return'
     const value = this.parseExpression();
     return { kind: "ReturnStatement", value };
   }
 
   private parseIfStatement(): IfStatement {
-    // previous() was 'if'
-    this.consume(TokenType.OpenParen, "Expected '(' after 'if'");
-    const condition = this.parseExpression();
-    this.consume(TokenType.CloseParen, "Expected ')' after if condition");
+    // allow optional parentheses
+    let condition: Expression;
+    if (this.match(TokenType.OpenParen)) {
+      condition = this.parseExpression();
+      this.consume(TokenType.CloseParen, "Expected ')' after if condition");
+    } else {
+      condition = this.parseExpression();
+    }
     const thenBranch = this.parseStatement();
     let elseBranch: Statement | undefined = undefined;
     if (this.match(TokenType.Else)) {
@@ -139,21 +139,22 @@ export default class Parser {
   }
 
   private parseWhileStatement(): WhileStatement {
-    // previous() was 'while'
-    this.consume(TokenType.OpenParen, "Expected '(' after 'while'");
-    const condition = this.parseExpression();
-    this.consume(TokenType.CloseParen, "Expected ')' after while condition");
+    let condition: Expression;
+    if (this.match(TokenType.OpenParen)) {
+      condition = this.parseExpression();
+      this.consume(TokenType.CloseParen, "Expected ')' after while condition");
+    } else {
+      condition = this.parseExpression();
+    }
     const body = this.parseStatement();
     return { kind: "WhileStatement", condition, body };
   }
 
   private parseForStatement(): ForStatement {
-    // previous() was 'for'
     let iterator: string;
     let rangeExpr: Expression;
 
     if (this.match(TokenType.OpenParen)) {
-      // for (x in xs)
       const iteratorToken = this.consume(
         TokenType.Identifier,
         "Expected loop variable in for"
@@ -163,7 +164,6 @@ export default class Parser {
       rangeExpr = this.parseExpression();
       this.consume(TokenType.CloseParen, "Expected ')' after for clause");
     } else {
-      // for x in xs
       const iteratorToken = this.consume(
         TokenType.Identifier,
         "Expected loop variable in for"
@@ -172,15 +172,12 @@ export default class Parser {
       this.consume(TokenType.In, "Expected 'in' in for-loop");
       rangeExpr = this.parseExpression();
     }
-
     const body = this.parseStatement();
     return { kind: "ForStatement", iterator, range: rangeExpr, body };
   }
 
   private parseBlock(): BlockStatement {
-    // Called when '{' has just been consumed
-    // If parseStatement used match(OpenBrace), we've already advanced past '{'
-    // If not, consume here:
+    // '{' already consumed if match; otherwise consume
     if (this.previous().type !== TokenType.OpenBrace) {
       this.consume(TokenType.OpenBrace, "Expected '{' to start block");
     }
@@ -204,8 +201,12 @@ export default class Parser {
     const expr = this.parseLogicalOr();
     if (this.match(TokenType.Equals)) {
       const value = this.parseAssignment();
-      if (expr.kind === "Identifier") {
-        return { kind: "AssignmentExpr", assignee: expr, value };
+      if ((expr as any).kind === "Identifier") {
+        return {
+          kind: "AssignmentExpr",
+          assignee: expr as Identifier,
+          value,
+        };
       }
       throw new Error("Invalid assignment target");
     }
@@ -289,28 +290,30 @@ export default class Parser {
   }
 
   /**
-   * parsePostfix handles both call and indexing, chaining:
-   *   f(a)(b)[i][j] ...
+   * parsePostfix handles chaining: calls and indexing
    */
   private parsePostfix(): Expression {
     let expr = this.parsePrimary();
     while (true) {
       if (this.match(TokenType.OpenParen)) {
-        // Function call
+        // function call
         const args: Expression[] = [];
         if (!this.check(TokenType.CloseParen)) {
           do {
             args.push(this.parseExpression());
           } while (this.match(TokenType.Comma));
         }
-        // Now must see ')'
         this.consume(TokenType.CloseParen, "Expected ')' after arguments");
         expr = { kind: "CallExpr", caller: expr, arguments: args };
       } else if (this.match(TokenType.OpenBracket)) {
-        // Indexing/subscript: expr[ indexExpr ]
+        // indexing: expr[ index ]
         const indexExpr = this.parseExpression();
         this.consume(TokenType.CloseBracket, "Expected ']' after index");
-        expr = { kind: "IndexExpr", target: expr, index: indexExpr };
+        expr = {
+          kind: "IndexExpr",
+          target: expr,
+          index: indexExpr,
+        } as IndexExpression;
       } else {
         break;
       }
@@ -321,7 +324,7 @@ export default class Parser {
   private parsePrimary(): Expression {
     // Lambda shorthand: Forge(params): expr
     if (this.check(TokenType.Identifier) && this.peek().value === "Forge") {
-      this.advance(); // consume 'Forge'
+      this.advance();
       const parameters = this.parseParameterList();
       this.consume(TokenType.Colon, "Expected ':' after lambda parameters");
       const exprBody = this.parseExpression();
@@ -332,7 +335,7 @@ export default class Parser {
       return { kind: "FunctionExpression", parameters, body: bodyBlock };
     }
 
-    // Boolean literals: treat identifiers "true"/"false"
+    // Boolean literals via identifier
     if (this.match(TokenType.Identifier)) {
       const name = this.previous().value;
       if (name === "true") {
@@ -341,10 +344,10 @@ export default class Parser {
       if (name === "false") {
         return { kind: "BooleanLiteral", value: false };
       }
-      // Otherwise a normal identifier
       return { kind: "Identifier", symbol: name };
     }
 
+    // Number literal
     if (this.match(TokenType.Number)) {
       const raw = this.previous().value;
       const num = Number(raw);
@@ -353,25 +356,28 @@ export default class Parser {
       }
       return { kind: "NumericLiteral", value: num };
     }
+
+    // String literal
     if (this.match(TokenType.String)) {
       return { kind: "StringLiteral", value: this.previous().value };
     }
 
+    // Anonymous function expression: def(params) { ... }
     if (this.match(TokenType.Def)) {
-      // Anonymous function expression: def(params) { ... }
       const parameters = this.parseParameterList();
       const body = this.parseBlock();
       return { kind: "FunctionExpression", parameters, body };
     }
 
+    // Parenthesized
     if (this.match(TokenType.OpenParen)) {
       const expr = this.parseExpression();
       this.consume(TokenType.CloseParen, "Expected ')' after expression");
       return expr;
     }
 
+    // List literal
     if (this.match(TokenType.OpenBracket)) {
-      // List literal
       const elements: Expression[] = [];
       if (!this.check(TokenType.CloseBracket)) {
         do {
@@ -382,14 +388,14 @@ export default class Parser {
       return { kind: "ListLiteral", elements };
     }
 
+    // Map literal
     if (this.match(TokenType.OpenBrace)) {
-      // Possible map literal
-      // If next is '}', empty map
+      // If empty: {}
       if (this.check(TokenType.CloseBrace)) {
-        this.advance(); // consume '}'
+        this.advance();
         return { kind: "MapLiteral", entries: [] };
       }
-      // If next indicates map entry: String or Identifier followed by Colon
+      // If map entries
       if (
         this.check(TokenType.String) ||
         (this.check(TokenType.Identifier) &&
@@ -414,10 +420,8 @@ export default class Parser {
         this.consume(TokenType.CloseBrace, "Expected '}' after map literal");
         return { kind: "MapLiteral", entries };
       }
-      // Otherwise: `{` in expression position is invalid
-      throw new Error(
-        "Unexpected '{' in expression position (not a map literal)"
-      );
+      // Otherwise invalid
+      throw new Error(`Unexpected '{' in expression at '${this.peek().value}'`);
     }
 
     throw new Error(`Unexpected token in expression: '${this.peek().value}'`);
@@ -440,7 +444,6 @@ export default class Parser {
   }
 
   private skipSeparators(): void {
-    // Skip semicolons between statements
     while (this.match(TokenType.Semicolon)) {
       // skip
     }

@@ -1,180 +1,175 @@
-// test.txt
+// Comprehensive Klang test-case
+// Save as test.klang and run via: deno run --allow-read main.ts test.klang
 
-// ─── Basic arithmetic and functions ───────────────────────────────────────────
+// 1. Basic variable declarations
+final int a = 10;
+let b = 20;
+let sumAB = a + b * 2 - (5 + 3);
+let flag = true && false || !false;
+print("sumAB:", sumAB);               // expect: sumAB: 10 + 40 - 8 = 42?
+print("flag:", flag);                 // expect: true && false = false; false || !false = false || true = true
 
-// Define a simple function
-def add(a, b) {
-  return a + b
+// 2. String concatenation
+let greeting = "Hello";
+let target = "World";
+let message = greeting + ", " + target + "!";
+print(message);                       // expect: Hello, World!
+
+// 3. Boolean literal via identifier
+let t = true;
+let f = false;
+print("t AND f:", t && f);            // false
+print("t OR f:", t || f);             // true
+print("!t:", !t);                     // false
+
+// 4. Null
+let nothing = null;
+print("nothing:", nothing);           // expect: null
+
+// 5. Function declaration and call
+def add(x, y) {
+  return x + y;
 }
+print("add(3,4):", add(3, 4));        // 7
 
-let sum2 = add(5, 7)
-print("sum2:", sum2)  // Expect: sum2: 12
-
-// Lambda shorthand (Forge) example: increment
-let inc = Forge(x): x + 1
-print("inc(10):", inc(10))  // Expect: inc(10): 11
-
-// ─── Lists and higher-order functions ────────────────────────────────────────
-
-// Create a list of numbers 0..4
-let numbers = range(5)      
-print("numbers:", numbers)  // Expect: numbers: [0, 1, 2, 3, 4]
-
-// Filter even numbers using lambda
-let evens = filter(Forge(x): x % 2 == 0, numbers)
-print("evens:", evens)      // Expect: evens: [0, 2, 4]
-
-// Map: square each number
-let squares = map(Forge(x): x * x, numbers)
-print("squares:", squares)  // Expect: squares: [0, 1, 4, 9, 16]
-
-// Sum of squares
-let totalSquares = sum(squares)
-print("totalSquares:", totalSquares) // Expect: totalSquares: 30
-
-// Conditional and loop example
-if (totalSquares > 20) {
-  print("Total of squares is large:", totalSquares)
-} else {
-  print("Total of squares is small:", totalSquares)
-}
-
-// ─── Literal map usage ───────────────────────────────────────────────────────
-
-// Create a map via literal syntax
-let mLiteral = {
-  "one": 1,
-  two: 2,
-  "nested": { a: 10, b: 20 },
-  flag: true
-}
-print("mLiteral:", mLiteral) // Expect something like: mLiteral: {one: 1, two: 2, nested: {a: 10, b: 20}, flag: true}
-
-// Access values
-print("mLiteral.one:", get(mLiteral, "one"))            // 1
-print("mLiteral.two:", get(mLiteral, "two"))            // 2
-print("nested a:", get(get(mLiteral, "nested"), "a"))   // 10
-print("flag:", get(mLiteral, "flag"))                   // true
-print("len(mLiteral):", len(mLiteral))                  // 4
-
-// Check hasKey
-print("hasKey one?", hasKey(mLiteral, "one"))           // true
-print("hasKey missing?", hasKey(mLiteral, "missing"))   // false
-
-// Iterate entries of literal map
-let literalEntries = entries(mLiteral)  // returns list of [key, value] pairs
-for pair in literalEntries {
-  let k = pair[0]
-  let v = pair[1]
-  print("Entry in mLiteral:", k, "=", v)
-}
-
-// ─── Constructed HashMap usage ───────────────────────────────────────────────
-
-// Create an empty map via constructor
-let m2 = HashMap()
-print("Empty m2:", m2)               // Expect: {}
-
-// Put values
-put(m2, "foo", 100)
-put(m2, "bar", 200)
-put(m2, "baz", 300)
-print("m2 after puts:", m2)         // Expect: {foo: 100, bar: 200, baz: 300}
-
-// Access
-print("m2.foo:", get(m2, "foo"))    // 100
-print("m2.bar:", get(m2, "bar"))    // 200
-print("m2.unknown:", get(m2, "unknown")) // null
-
-// Keys and values
-print("m2 keys:", keys(m2))         // ["foo", "bar", "baz"]
-print("m2 values:", values(m2))     // [100, 200, 300]
-
-// entries
-for e in entries(m2) {
-  // e is [key, value]
-  print("m2 entry:", e[0], "->", e[1])
-}
-
-// Remove a key
-remove(m2, "bar")
-print("m2 after remove bar:", m2)   // {foo: 100, baz: 300}
-print("hasKey bar?", hasKey(m2, "bar")) // false
-
-// ─── Merging maps ────────────────────────────────────────────────────────────
-
-// Merge literal map and constructed map: keys from mLiteral and m2
-// Note: if keys overlap, second map's value overrides first's
-let merged = mergeMaps(mLiteral, m2)
-print("merged:", merged)
-// Check some entries
-print("merged.one:", get(merged, "one"))   // from mLiteral => 1
-print("merged.foo:", get(merged, "foo"))   // from m2 => 100
-
-// Remove from merged
-remove(merged, "one")
-print("merged after remove one:", merged)
-print("hasKey one?", hasKey(merged, "one"))
-
-// ─── Nested and complex scenarios ────────────────────────────────────────────
-
-// Nested literal maps and loops
-let users = {
-  "alice": { age: 30, scores: [10, 20, 30] },
-  bob: { age: 25, scores: [5, 15, 25] },
-  charlie: { age: 35, scores: [20, 30, 40] }
-}
-print("users:", users)
-
-// Compute average score per user and store in a new HashMap
-let avgScores = HashMap()
-for entry in entries(users) {
-  let username = entry[0]
-  let profile = entry[1]
-  // profile is a map with keys "age" and "scores"
-  let scoresList = get(profile, "scores")
-  let total = sum(scoresList)
-  let count = len(scoresList)
-  // average = total / count
-  let avg = total / count
-  put(avgScores, username, avg)
-}
-print("avgScores:", avgScores)
-
-// Use higher-order function map on a list of usernames
-let namesList = keys(users)  // ["alice", "bob", "charlie"]
-let greetings = map(
-  Forge(name): "Hello, " + name + "! Your avg score is " + get(avgScores, name),
-  namesList
-)
-for g in greetings {
-  print(g)
-}
-
-// Conditional inside loop
-for name in namesList {
-  let age = get(get(users, name), "age")
-  if (age >= 30) {
-    print(name + " is 30 or older.")
+// 6. Recursive function: factorial
+def factorial(n) {
+  if n == 0 {
+    return 1;
   } else {
-    print(name + " is younger than 30.")
+    return n * factorial(n - 1);
   }
 }
+print("factorial(5):", factorial(5)); // 120
 
-// ─── Testing len on various types ─────────────────────────────────────────────
+// 7. Lists: literal, len, sum, range
+let lst = [1, 2, 3, 4, 5];
+print("lst:", lst);
+print("len(lst):", len(lst));         // 5
+print("sum(lst):", sum(lst));         // 1+2+3+4+5 = 15
 
-print("len of empty list:", len([]))           // 0
-print("len of list [1,2,3]:", len([1,2,3]))     // 3
-print("len of empty map:", len({}))             // 0
-print("len of users map:", len(users))          // 3
+// Depending on your range builtin: e.g., range(start, end) producing [start,...,end-1] or inclusive
+// Here assume range(start, end) yields [start, start+1, ..., end-1]
+let r = range(1, 6);
+print("range(1,6):", r);              // [1,2,3,4,5]
 
-// ─── Error / edge-case checks (optional) ─────────────────────────────────────
-// Uncomment to test error handling:
-// let bad = HashMap()
-// // get with non-string/number/boolean key: e.g., list as key should error
-// // print(get(bad, [1,2]))  // Should throw a runtime error about invalid map key
+// 8. Filtering and mapping
+def isEven(x) {
+  return x % 2 == 0;
+}
+let evens = filter(lst, isEven);
+print("evens:", evens);               // [2,4]
 
-// ─── Final result ─────────────────────────────────────────────────────────────
+let squares = map(lst, Forge(x): x * x);
+print("squares:", squares);           // [1,4,9,16,25]
+print("sum(squares):", sum(squares)); // 55
 
-// Return a final value (optional). For example, return size of merged:
-len(merged)
+// 9. List indexing (if supported)
+let first = lst[0];
+let third = lst[2];
+print("first, third:", first, third); // 1, 3
+
+// 10. For-in loop over list
+for item in lst {
+  print("for item:", item);
+}
+
+// 11. While loop
+let idx = 0;
+while idx < len(lst) {
+  print("while idx:", idx);
+  idx = idx + 1;
+}
+
+// 12. Map literal syntax and indexing
+let mapLit = { a: 1, b: 2, c: 3 };
+print("mapLit:", mapLit);
+print("mapLit['b']:", mapLit["b"]);   // 2
+print("mapLit.a:", mapLit.a);         // if dot-access supported; if not, skip or comment out
+
+// 13. Builtin HashMap usage
+let hm = HashMap();                   // assume builtin constructor
+hm.put("one", 1);
+hm.put("two", 2);
+hm.put("three", 3);
+print("hm.get('two'):", hm.get("two")); // 2
+print("hm.contains('two'):", hm.contains("two")); // true
+print("hm.size():", hm.size());       // 3
+hm.remove("two");
+print("hm.contains('two') after remove:", hm.contains("two")); // false
+print("hm.get('two') after remove:", hm.get("two"));           // null or error depending on implementation
+
+// 14. Higher-order functions
+def applyTwice(f, x) {
+  return f(f(x));
+}
+let inc = Forge(x): x + 1;
+print("applyTwice(inc, 5):", applyTwice(inc, 5)); // 7
+
+// 15. Assigning function expressions to variables
+let mul2 = Def(x) {
+  return x * 2;
+};
+print("mul2(7):", mul2(7));            // 14
+
+// 16. Nested scopes and closures
+def outer() {
+  let outerVal = 100;
+  def inner() {
+    return outerVal + 1;
+  }
+  return inner();
+}
+print("outer():", outer());            // 101
+
+// 17. Conditional without else
+def checkPositive(n) {
+  if n > 0 {
+    print(n, "is positive");
+  }
+  // no explicit return here; returns null implicitly
+}
+checkPositive(5);
+let ret = checkPositive(-3);
+print("checkPositive(-3) returns:", ret); // null
+
+// 18. Complex expression chaining
+let complex = ((a + b) * (factorial(3))) / 2 - (len(lst) || 0);
+print("complex:", complex);
+
+// 19. Boolean and/or short-circuit
+// Assuming Klang uses lazy evaluation: in `false && expr`, expr not evaluated; in `true || expr`, expr not evaluated
+def sideEffect() {
+  print("sideEffect called");
+  return true;
+}
+print("false && sideEffect():", false && sideEffect()); // should not print "sideEffect called"
+print("true || sideEffect():", true || sideEffect());   // should not print "sideEffect called"
+
+// 20. Mixing map literal with built-in HashMap
+let mapFromLit = HashMap();
+for entry in ["a","b","c"] {
+  mapFromLit.put(entry, mapLit[entry]);
+}
+print("mapFromLit.get('c'):", mapFromLit.get("c")); // 3
+
+// 21. Optional: demonstrate mutate list
+let mutableList = [10, 20, 30];
+mutableList[1] = 25;                   // if assignment to index supported
+print("mutableList after assignment:", mutableList);
+
+// 22. Edge: empty list and empty map
+let emptyList = [];
+print("emptyList:", emptyList, "len:", len(emptyList), "sum:", sum(emptyList));
+let emptyMap = HashMap();
+print("emptyMap.size():", emptyMap.size(), "contains 'x':", emptyMap.contains("x"));
+
+// 23. Lambda shorthand in complex context
+let dblAndAdd = Forge(x, y): x * 2 + y;
+print("dblAndAdd(3,4):", dblAndAdd(3, 4)); // 10
+
+// 24. Combining filter/map inline
+let filteredMapped = map(filter(range(1, 11), Forge(x): x % 2 == 1), Forge(x): x * x);
+print("filteredMapped (odd squares 1..10):", filteredMapped);
+
+// End of comprehensive test

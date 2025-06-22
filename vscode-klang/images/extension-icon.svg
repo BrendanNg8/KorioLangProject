@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="16" height="16"
+     viewBox="0 0 16 16"
+     role="img"
+     aria-label="Klang file">
+  <!-- Background page shape -->
+  <path d="M2 1 H10 L14 5 V15 H2 Z"
+        fill="#FFFFFF" stroke="#6A9955" stroke-width="1"/>
+  <!-- Folded corner -->
+  <polygon points="10,1 14,5 10,5"
+           fill="#6A9955"/>
+  <!-- Letter K inside -->
+  <text x="4" y="11"
+        font-family="Arial, sans-serif"
+        font-size="8"
+        fill="#6A9955"
+        font-weight="bold">K</text>
+</svg>

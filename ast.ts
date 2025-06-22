@@ -1,7 +1,6 @@
 // ast.ts
 
 // ─── Token Types ─────────────────────────────────────────────────────────────
-
 export enum TokenType {
   // Single-character tokens
   OpenParen, // (
@@ -27,32 +26,32 @@ export enum TokenType {
   Star, // *
   Slash, // /
   Percent, // %
-  Bang, // !
   And, // &&
   Or, // ||
+  Dot, // .
+  Bang, // !
 
   // Literals
-  Identifier,
-  Number,
-  String,
+  Identifier, // names
+  Number, // numeric literals
+  String, // string literals
 
   // Keywords
-  Let,
-  Final,
-  Def,
-  If,
-  Else,
-  While,
-  For,
-  Return,
-  In,
+  Let, // let
+  Final, // final
+  Def, // def
+  If, // if
+  Else, // else
+  While, // while
+  For, // for
+  Return, // return
+  In, // in
 
   // Special
   EOF,
 }
 
 // ─── Token ────────────────────────────────────────────────────────────────────
-
 export interface Token {
   type: TokenType;
   value: string;
@@ -60,7 +59,7 @@ export interface Token {
 
 // ─── AST Node Kinds ──────────────────────────────────────────────────────────
 
-// Expression and Statement kinds
+// Statements
 export type Statement =
   | ExpressionStatement
   | VarDeclaration
@@ -71,33 +70,10 @@ export type Statement =
   | ForStatement
   | BlockStatement;
 
-export type Expression =
-  | Identifier
-  | NumericLiteral
-  | StringLiteral
-  | BooleanLiteral
-  | ListLiteral
-  | MapLiteral
-  | BinaryExpression
-  | UnaryExpression
-  | CallExpression
-  | FunctionExpression
-  | AssignmentExpression
-  | IndexExpression;
-
-export interface IndexExpression {
-  kind: "IndexExpr";
-  target: Expression;
-  index: Expression;
-}
-
-// Program node
 export interface Program {
   kind: "Program";
   body: Statement[];
 }
-
-// Statements
 
 export interface ExpressionStatement {
   kind: "ExpressionStatement";
@@ -150,6 +126,20 @@ export interface BlockStatement {
 }
 
 // Expressions
+export type Expression =
+  | Identifier
+  | NumericLiteral
+  | StringLiteral
+  | BooleanLiteral
+  | ListLiteral
+  | MapLiteral
+  | BinaryExpression
+  | UnaryExpression
+  | CallExpression
+  | FunctionExpression
+  | AssignmentExpression
+  | IndexExpression
+  | MemberExpression;
 
 export interface Identifier {
   kind: "Identifier";
@@ -212,6 +202,18 @@ export interface AssignmentExpression {
   value: Expression;
 }
 
+export interface IndexExpression {
+  kind: "IndexExpr";
+  target: Expression;
+  index: Expression;
+}
+
+export interface MemberExpression {
+  kind: "MemberExpr";
+  object: Expression;
+  property: string;
+}
+
 // ─── Lexer / Tokenizer ─────────────────────────────────────────────────────────
 
 const KEYWORDS: Record<string, TokenType> = {
@@ -224,7 +226,6 @@ const KEYWORDS: Record<string, TokenType> = {
   for: TokenType.For,
   return: TokenType.Return,
   in: TokenType.In,
-  // Note: we do NOT map "true"/"false" here; parser handles them as boolean literals via Identifier check.
 };
 
 export function tokenize(input: string): Token[] {
@@ -259,13 +260,12 @@ export function tokenize(input: string): Token[] {
       continue;
     }
 
-    // Strings
+    // Strings (double-quoted)
     if (char === '"') {
       i++;
       let value = "";
       while (i < input.length && input[i] !== '"') {
         if (input[i] === "\\" && i + 1 < input.length) {
-          // simple escape support: \" or \\
           const next = input[i + 1];
           if (next === '"' || next === "\\") {
             value += next;
@@ -280,10 +280,26 @@ export function tokenize(input: string): Token[] {
       continue;
     }
 
-    // Numbers
+    // Numbers starting with digit, possibly containing a single dot
     if (isDigit(char)) {
       let num = "";
+      let hasDot = false;
       while (i < input.length && /[0-9.]/.test(input[i])) {
+        if (input[i] === ".") {
+          if (hasDot) break; // second dot ends numeric literal
+          hasDot = true;
+        }
+        num += input[i++];
+      }
+      tokens.push({ type: TokenType.Number, value: num });
+      continue;
+    }
+
+    // Leading fractional: .5
+    if (char === "." && i + 1 < input.length && isDigit(input[i + 1])) {
+      let num = "0.";
+      i++;
+      while (i < input.length && isDigit(input[i])) {
         num += input[i++];
       }
       tokens.push({ type: TokenType.Number, value: num });
@@ -340,59 +356,59 @@ export function tokenize(input: string): Token[] {
     // Single-character tokens
     switch (char) {
       case "(":
-        tokens.push({ type: TokenType.OpenParen, value: char });
+        tokens.push({ type: TokenType.OpenParen, value: "(" });
         i++;
         break;
       case ")":
-        tokens.push({ type: TokenType.CloseParen, value: char });
+        tokens.push({ type: TokenType.CloseParen, value: ")" });
         i++;
         break;
       case "{":
-        tokens.push({ type: TokenType.OpenBrace, value: char });
+        tokens.push({ type: TokenType.OpenBrace, value: "{" });
         i++;
         break;
       case "}":
-        tokens.push({ type: TokenType.CloseBrace, value: char });
+        tokens.push({ type: TokenType.CloseBrace, value: "}" });
         i++;
         break;
       case "[":
-        tokens.push({ type: TokenType.OpenBracket, value: char });
+        tokens.push({ type: TokenType.OpenBracket, value: "[" });
         i++;
         break;
       case "]":
-        tokens.push({ type: TokenType.CloseBracket, value: char });
+        tokens.push({ type: TokenType.CloseBracket, value: "]" });
         i++;
         break;
       case ",":
-        tokens.push({ type: TokenType.Comma, value: char });
+        tokens.push({ type: TokenType.Comma, value: "," });
         i++;
         break;
       case ":":
-        tokens.push({ type: TokenType.Colon, value: char });
+        tokens.push({ type: TokenType.Colon, value: ":" });
         i++;
         break;
       case ";":
-        tokens.push({ type: TokenType.Semicolon, value: char });
+        tokens.push({ type: TokenType.Semicolon, value: ";" });
         i++;
         break;
       case "+":
-        tokens.push({ type: TokenType.Plus, value: char });
+        tokens.push({ type: TokenType.Plus, value: "+" });
         i++;
         break;
       case "-":
-        tokens.push({ type: TokenType.Minus, value: char });
+        tokens.push({ type: TokenType.Minus, value: "-" });
         i++;
         break;
       case "*":
-        tokens.push({ type: TokenType.Star, value: char });
+        tokens.push({ type: TokenType.Star, value: "*" });
         i++;
         break;
       case "%":
-        tokens.push({ type: TokenType.Percent, value: char });
+        tokens.push({ type: TokenType.Percent, value: "%" });
         i++;
         break;
       case "/":
-        tokens.push({ type: TokenType.Slash, value: char });
+        tokens.push({ type: TokenType.Slash, value: "/" });
         i++;
         break;
       case "=":
@@ -400,7 +416,6 @@ export function tokenize(input: string): Token[] {
         i++;
         break;
       case "!":
-        // single '!' → unary negation
         tokens.push({ type: TokenType.Bang, value: "!" });
         i++;
         break;
@@ -410,6 +425,11 @@ export function tokenize(input: string): Token[] {
         break;
       case ">":
         tokens.push({ type: TokenType.Greater, value: ">" });
+        i++;
+        break;
+      case ".":
+        // standalone dot → member-access or error if stray
+        tokens.push({ type: TokenType.Dot, value: "." });
         i++;
         break;
       default:

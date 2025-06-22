@@ -1,21 +1,70 @@
 {
+  "$schema": "vscode://schemas/vscode-extension",
   "name": "klang-language",
   "displayName": "Klang Language",
-  "description": "Syntax highlighting for the Klang language",
+  "description": "Syntax highlighting, snippets, commands, and file icons for Klang files",
   "version": "0.0.1",
-  "publisher": "your-publisher-name", 
+  "publisher": "your-publisher-name",
   "engines": {
     "vscode": "^1.50.0"
   },
   "categories": [
-    "Languages"
+    "Programming Languages"
+  ],
+  "icon": "images/icon.png",
+  "main": "./extension.js",
+  "activationEvents": [
+    "onLanguage:klang",
+    "onCommand:klang.runFile",
+    "onCommand:klang.toggleAutoRunOnSave"
   ],
   "contributes": {
+    "commands": [
+      {
+        "command": "klang.runFile",
+        "title": "Klang: Run File"
+      },
+      {
+        "command": "klang.toggleAutoRunOnSave",
+        "title": "Klang: Toggle Run on Save"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Klang",
+      "properties": {
+        "klang.interpreterPath": {
+          "type": "string",
+          "default": "deno run --allow-read --allow-run \"${file}\"",
+          "description": "Command to run the Klang interpreter. Use ${file} for the current file path."
+        },
+        "klang.runOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically run the Klang file on save."
+        },
+        "klang.lintOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Perform syntax linting on save and show diagnostics."
+        },
+        "klang.showASTOnRun": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, print AST before execution when running the file."
+        }
+      }
+    },
     "languages": [
       {
         "id": "klang",
-        "aliases": ["Klang", "klang"],
-        "extensions": [".klang"],
+        "aliases": [
+          "Klang",
+          "klang"
+        ],
+        "extensions": [
+          ".klang"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -25,6 +74,31 @@
         "scopeName": "source.klang",
         "path": "./syntaxes/klang.tmLanguage.json"
       }
+    ],
+    "snippets": [
+      {
+        "language": "klang",
+        "path": "./snippets/klang.json"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "klang-file-icons",
+        "label": "Klang File Icons",
+        "path": "./file-icon-theme.json"
+      }
     ]
-  }
+  },
+  "scripts": {
+    "package": "vsce package",
+    "lint": "echo \"Add lint scripts if needed\""
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^2.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BrendanNg8/KorioLangProject"
+  },
+  "license": "MIT"
 }

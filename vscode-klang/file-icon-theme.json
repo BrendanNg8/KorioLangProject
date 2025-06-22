@@ -1,0 +1,14 @@
+{
+  "iconDefinitions": {
+    "klang-file": {
+      "iconPath": "./images/icon.png"
+    }
+  },
+  "fileExtensions": {
+    "klang": "klang-file"
+  },
+  "languageIds": {
+    "klang": "klang-file"
+  },
+  "scope": "file"
+}

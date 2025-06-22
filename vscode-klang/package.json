@@ -1,0 +1,30 @@
+{
+  "name": "klang-language",
+  "displayName": "Klang Language",
+  "description": "Syntax highlighting for the Klang language",
+  "version": "0.0.1",
+  "publisher": "your-publisher-name", 
+  "engines": {
+    "vscode": "^1.50.0"
+  },
+  "categories": [
+    "Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "klang",
+        "aliases": ["Klang", "klang"],
+        "extensions": [".klang"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "klang",
+        "scopeName": "source.klang",
+        "path": "./syntaxes/klang.tmLanguage.json"
+      }
+    ]
+  }
+}

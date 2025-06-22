@@ -1,0 +1,83 @@
+{
+  // Associate .klang files with the Klang language
+  "files.associations": {
+    "*.klang": "klang"
+  },
+
+  // Editor settings specifically for Klang files
+  "[klang]": {
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "editor.wordBasedSuggestions": "off",
+    "editor.formatOnType": false
+  },
+
+  // Token color customizations for Klang scopes
+  // These settings assign specific colors to the scopes defined in your TextMate grammar.
+  "editor.tokenColorCustomizations": {
+    "textMateRules": [
+      {
+        "scope": "keyword.control.klang",
+        "settings": {
+          "foreground": "#C586C0" // purple for control keywords: let, def, if, else, etc.
+        }
+      },
+      {
+        "scope": "storage.type.klang",
+        "settings": {
+          "foreground": "#569CD6" // blue for type keywords: int, float, string, bool, list, map
+        }
+      },
+      {
+        "scope": "constant.language.boolean.klang",
+        "settings": {
+          "foreground": "#B5CEA8" // light green for true/false/null
+        }
+      },
+      {
+        "scope": "string.quoted.double.klang",
+        "settings": {
+          "foreground": "#CE9178" // orange for string literals
+        }
+      },
+      {
+        "scope": "constant.numeric.klang",
+        "settings": {
+          "foreground": "#B5CEA8" // light green for numbers (or choose another)
+        }
+      },
+      {
+        "scope": "comment.line.double-slash.klang",
+        "settings": {
+          "foreground": "#6A9955", // green for line comments
+          "fontStyle": "italic"
+        }
+      },
+      {
+        "scope": "comment.block.klang",
+        "settings": {
+          "foreground": "#6A9955", // green for block comments
+          "fontStyle": "italic"
+        }
+      },
+      {
+        "scope": "keyword.operator.klang",
+        "settings": {
+          "foreground": "#D4D4D4" // light gray for operators
+        }
+      },
+      {
+        "scope": "variable.other.klang",
+        "settings": {
+          "foreground": "#9CDCFE" // light blue for identifiers
+        }
+      },
+      {
+        "scope": "punctuation.separator.klang",
+        "settings": {
+          "foreground": "#D4D4D4" // gray for punctuation
+        }
+      }
+    ]
+  }
+}

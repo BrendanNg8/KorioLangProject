@@ -1,0 +1,27 @@
+{
+  "Function Declaration": {
+    "prefix": "def",
+    "body": ["def ${1:functionName}(${2:params}) {", "  $0", "}"],
+    "description": "Define a function"
+  },
+  "If Statement": {
+    "prefix": "if",
+    "body": ["if (${1:condition}) {", "  $0", "}"],
+    "description": "If statement"
+  },
+  "For Loop": {
+    "prefix": "for",
+    "body": ["for (${1:item} in ${2:range}) {", "  $0", "}"],
+    "description": "For-in loop"
+  },
+  "Forge Lambda": {
+    "prefix": "forge",
+    "body": ["Forge(${1:params}): ${2:expression}"],
+    "description": "Lambda shorthand"
+  },
+  "Let Declaration": {
+    "prefix": "let",
+    "body": ["let ${1:varName} = ${2:expr}"],
+    "description": "Variable declaration"
+  }
+}

@@ -1,0 +1,19 @@
+let m = HashMap()
+put(m, "x", 42)
+print(get(m, "x"))       // 42
+print(hasKey(m, "y"))    // false
+put(m, "y", 100)
+print(keys(m))           // ["x","y"]
+remove(m, "x")
+print(get(m, "x"))       // null
+
+let squares = map(range(5), Forge(x): x * x)
+print(squares)           // [0,1,4,9,16]
+
+let evens = filter(range(10), Forge(n): n % 2 == 0)
+print(evens)             // [0,2,4,6,8]
+
+print(sum([1,2,3,4]))    // 10
+
+
+

@@ -1,13 +1,7 @@
-By the time you read this...
-- Test more testcases
+FIRST -> Make sure the language passes a testcase that covers EVERYTHING
 
+SECOND -> Incorporate it so like you can do list(x) or int(x) -> Datatype/Structure conversions 
 
-Lambda Function Name will be -> Forge
-- E.g.: Forge (x): x + x 
-- The parameters must be in parantheses as shown in: Forge(x), Forge(x, y): x + y
+THIRD -> Finish the Extension
 
-Also implement data structures like HashMaps and add more commonly used functions that I already haven't added, I have range, filter, sum, map, len, print
-
-Remove the need for semi colons in code cus they annoying
-
-Add data types: final, boolean, int, float, string
+FOURTH -> Add more stuff

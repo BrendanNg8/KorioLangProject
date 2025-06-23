@@ -1,175 +1,518 @@
-// Comprehensive Klang test-case
-// Save as test.klang and run via: deno run --allow-read main.ts test.klang
+// --------------------------------------------------
+// 1. Basic declarations, arithmetic, boolean, strings
+// --------------------------------------------------
 
-// 1. Basic variable declarations
-final int a = 10;
-let b = 20;
-let sumAB = a + b * 2 - (5 + 3);
-let flag = true && false || !false;
-print("sumAB:", sumAB);               // expect: sumAB: 10 + 40 - 8 = 42?
-print("flag:", flag);                 // expect: true && false = false; false || !false = false || true = true
+let intVal: number = 42
+final pi: number = 3.1415
+print("intVal, pi:", intVal, pi)  
+// Expect: intVal, pi: 42 3.1415
 
-// 2. String concatenation
-let greeting = "Hello";
-let target = "World";
-let message = greeting + ", " + target + "!";
-print(message);                       // expect: Hello, World!
+// Arithmetic with floats and ints
+let a: number = 7
+let b: number = 3
+print("a+b, a-b, a*b, a/b, a%b:", a + b, a - b, a * b, a / b, a % b)  
+// Expect: a+b, a-b, a*b, a/b, a%b: 10 4 21 2.3333333333333335 1
 
-// 3. Boolean literal via identifier
-let t = true;
-let f = false;
-print("t AND f:", t && f);            // false
-print("t OR f:", t || f);             // true
-print("!t:", !t);                     // false
+// Boolean logic
+let t: boolean = true
+let f: boolean = false
+print("t and f:", t and f)           // Expect: t and f: false
+print("t or f:", t or f)             // Expect: t or f: true
+print("!t:", !t)                     // Expect: !t: false
+print("Comparisons:", a < b, a <= b, a > b, a >= b, a == b, a != b)  
+// Expect: false false true true false true
 
-// 4. Null
-let nothing = null;
-print("nothing:", nothing);           // expect: null
+// String concatenation and comparison
+let hello: string = "Hello"
+let world: string = "World"
+let greet: string = hello + ", " + world + "!"
+print(greet)                        // Expect: Hello, World!
+print("len(greet):", len(greet))    // Expect: len(greet): 13
+print("Compare strings:", "a" < "b", "abc" == "abc", "abc" != "def")  
+// Expect: true true true
 
-// 5. Function declaration and call
-def add(x, y) {
-  return x + y;
+// --------------------------------------------------
+// 2. Lists: literal, indexing, mutation, concatenation
+// --------------------------------------------------
+
+let lst: list = [1, 2, 3, 4]
+print("lst:", lst)                  // Expect: [1, 2, 3, 4]
+print("lst[2]:", lst[2])            // Expect: lst[2]: 3
+
+// Mutation
+lst[0] = 100
+lst[3] = lst[1] + 5
+print("lst after mutations:", lst)  // Expect: [100, 2, 3, 7]
+
+// Concatenation
+let more: list = [8, 9]
+let combined: list = lst + more
+print("combined:", combined)        // Expect: [100,2,3,7,8,9]
+
+// sum and empty list
+print("sum(combined):", sum(combined)) // Expect: sum(combined): 129
+let emptyList: list = []
+print("sum(emptyList):", sum(emptyList)) // Expect: sum(emptyList): 0
+print("len(emptyList):", len(emptyList)) // Expect: len(emptyList): 0
+
+// list(string)
+let chars: list = list("xyz")
+print("list(\"xyz\"):", chars)      // Expect: ["x","y","z"]
+// Index out-of-bounds test (uncomment to verify error):
+// print(chars[5])                  // Error: index out of bounds
+
+// --------------------------------------------------
+// 3. Maps: literal, indexing, mutation, merging
+// --------------------------------------------------
+
+let m: map = {"one": 1, "two": 2}
+print("m:", m)                      // Expect: {"one":1, "two":2}
+print("m[\"one\"]:", m["one"])      // Expect: 1
+
+// Mutation / add
+m["three"] = m["one"] + m["two"]
+print("m after adding three:", m)   // Expect: {"one":1,"two":2,"three":3}
+
+// Merge maps
+let defaults: map = {"host": "localhost", "port": 80}
+let overrides: map = {"port": 8080, "secure": true}
+let cfg: map = defaults + overrides
+// Expect: {"host":"localhost","port":8080,"secure":true}
+print("cfg merged:", cfg)
+
+// Lookup missing key returns null
+print("cfg[\"missing\"]:", cfg["missing"]) // Expect: null
+
+// --------------------------------------------------
+// 4. For-loops, while-loops
+// --------------------------------------------------
+
+// For over list
+print("For (i in combined):")
+for (i in combined) {
+  print(" item:", i)
 }
-print("add(3,4):", add(3, 4));        // 7
+// Expect lines: item: 100, item: 2, item: 3, item: 7, item: 8, item: 9
 
-// 6. Recursive function: factorial
-def factorial(n) {
-  if n == 0 {
-    return 1;
+// For over string
+print("For (ch in \"hi\"):")
+for (ch in "hi") {
+  print(" ch:", ch)
+}
+// Expect: ch: h; ch: i
+
+// For over map keys
+print("For (key in cfg): key=value")
+for (key in cfg) {
+  print(key, "=", cfg[key])
+}
+// Expect lines: host=localhost, port=8080, secure=true (order may vary)
+
+// Nested for: multiplication table 1..3
+print("Multiplication table 1..3:")
+for (x in range(1, 4)) {
+  for (y in range(1, 4)) {
+    print(x, "*", y, "=", x * y)
+  }
+}
+// Expect lines for 1*1..3*3
+
+// While loop: countdown
+let cnt: number = 3
+print("Countdown:")
+while (cnt > 0) {
+  print(cnt)
+  cnt = cnt - 1
+}
+// Expect: 3,2,1
+
+// --------------------------------------------------
+// 5. If / else if / else
+// --------------------------------------------------
+
+def categorize(n: number) {
+  if (n < 0) {
+    return "negative"
   } else {
-    return n * factorial(n - 1);
+    if (n == 0) {
+      return "zero"
+    } else {
+      if (n % 2 == 0) {
+        return "even"
+      }
+      return "odd"
+    }
   }
 }
-print("factorial(5):", factorial(5)); // 120
 
-// 7. Lists: literal, len, sum, range
-let lst = [1, 2, 3, 4, 5];
-print("lst:", lst);
-print("len(lst):", len(lst));         // 5
-print("sum(lst):", sum(lst));         // 1+2+3+4+5 = 15
+print("categorize tests:", categorize(-1), categorize(0), categorize(2), categorize(3))
+// Expect: "negative" "zero" "even" "odd"
 
-// Depending on your range builtin: e.g., range(start, end) producing [start,...,end-1] or inclusive
-// Here assume range(start, end) yields [start, start+1, ..., end-1]
-let r = range(1, 6);
-print("range(1,6):", r);              // [1,2,3,4,5]
+// --------------------------------------------------
+// 6. Functions, recursion, multiple params
+// --------------------------------------------------
 
-// 8. Filtering and mapping
-def isEven(x) {
-  return x % 2 == 0;
+// Simple add
+def add(x: number, y: number) {
+  return x + y
 }
-let evens = filter(lst, isEven);
-print("evens:", evens);               // [2,4]
+print("add(5,7):", add(5, 7))        // Expect: 12
 
-let squares = map(lst, Forge(x): x * x);
-print("squares:", squares);           // [1,4,9,16,25]
-print("sum(squares):", sum(squares)); // 55
+// GCD via recursion (Euclid’s algorithm)
+def gcd(a: number, b: number) {
+  if (b == 0) {
+    return a
+  }
+  return gcd(b, a % b)
+}
+print("gcd tests:", gcd(48, 18), gcd(100, 25))  
+// Expect: gcd tests: 6 25
 
-// 9. List indexing (if supported)
-let first = lst[0];
-let third = lst[2];
-print("first, third:", first, third); // 1, 3
+// Fibonacci via recursion (small n)
+def fib(n: number) {
+  if (n <= 1) {
+    return n
+  }
+  return fib(n - 1) + fib(n - 2)
+}
+print("fib(5):", fib(5))            // Expect: 5
 
-// 10. For-in loop over list
-for item in lst {
-  print("for item:", item);
+// Factorial via recursion
+def fact(n: number) {
+  if (n <= 1) {
+    return 1
+  }
+  return n * fact(n - 1)
+}
+print("fact(5):", fact(5))          // Expect: 120
+
+// Zero-arg function
+def zero() {
+  return 0
+}
+print("zero():", zero())            // Expect: 0
+
+// --------------------------------------------------
+// 7. Lambdas (forge) and higher-order functions
+// --------------------------------------------------
+
+// Simple lambda multiple params
+let sumXY: number = (forge(x, y) -> { x + y })(10, 20)
+print("lambda sumXY(10,20):", sumXY) // Expect: 30
+
+// Zero-arg lambda
+let alwaysTen = forge() -> { 10 }
+print("alwaysTen():", alwaysTen())  // Expect: 10
+
+// Lambda capturing outer variable
+let factor: number = 5
+let multByFactor = forge(x) -> { x * factor }
+print("multByFactor(3):", multByFactor(3))  // Expect: 15
+factor = 2
+print("after changing factor, multByFactor(3):", multByFactor(3)) // Expect: 6
+
+// applyNTimes example with multiple params
+def applyNTimes(f, n: number) {
+  if (n <= 0) {
+    return forge(x) -> { x }
+  }
+  return forge(x) -> { applyNTimes(f, n - 1)(f(x)) }
+}
+def inc(x: number) { return x + 1 }
+print("applyNTimes inc 3 on 5:", applyNTimes(inc, 3)(5)) // Expect: 8
+
+// Compose two functions: compose(f,g)(x) = f(g(x))
+def compose(f, g) {
+  return forge(x) -> { f(g(x)) }
+}
+def add2(x: number) { return x + 2 }
+def mul3(x: number) { return x * 3 }
+let add2ThenMul3 = compose(mul3, add2)
+print("compose:", add2ThenMul3(4))   // Expect: mul3(add2(4)) = (4+2)*3 = 18
+
+// Recursive lambda assigned to variable
+let fibLambda = forge(n) -> {
+  if (n <= 1) {
+    return n
+  }
+  return fibLambda(n - 1) + fibLambda(n - 2)
+}
+print("fibLambda(6):", fibLambda(6)) // Expect: 8
+
+// --------------------------------------------------
+// 8. Closures in loops (test capturing loop var)
+// --------------------------------------------------
+
+let funcs: list = []
+for (i in range(0, 3)) {
+  // capture i in each iteration
+  let f = forge() -> { i }
+  funcs = funcs + [f]
+}
+let results: list = map(forge(fn) -> { fn() }, funcs)
+print("closure in loop results:", results)  
+// Expect: [0, 1, 2]
+
+// --------------------------------------------------
+// 9. Nested map/filter pipelines
+// --------------------------------------------------
+
+let data: list = [1, 2, 3, 4, 5, 6]
+// filter evens, map to squares, then filter > 10
+let pipeline: list = filter(
+  forge(x) -> { x > 10 },
+  map(
+    forge(x) -> { x * x },
+    filter(forge(x) -> { x % 2 == 0 }, data)
+  )
+)
+print("pipeline result:", pipeline)  
+// Even numbers: [2,4,6] -> squares [4,16,36] -> filter >10 -> [16,36]
+
+// --------------------------------------------------
+// 10. Type annotations enforcement
+// --------------------------------------------------
+
+// Correct
+let nums: list = [1, 2, 3]
+let doubled: list = map(forge(x: number) -> { x * 2 }, nums)
+print("doubled:", doubled)           // Expect: [2,4,6]
+
+// Uncomment to test type error:
+// let bad: list = map(forge(x: string) -> { len(x) }, [1,2,3])
+// Expect: runtime type mismatch error
+
+// --------------------------------------------------
+// 11. Assignment expressions in larger expressions
+// --------------------------------------------------
+
+// Let a = 1; then b = (a=5); check that a and b updated
+let a2: number = 1
+let b2: number = (a2 = 5)
+print("after assignment in expr, a2,b2:", a2, b2) // Expect: 5 5
+
+// Use assignment in if condition
+let condAssign: boolean = false
+if ((condAssign = (a2 > 0)) and condAssign) {
+  print("condAssign is now:", condAssign)  // Expect: condAssign is now: true
 }
 
-// 11. While loop
-let idx = 0;
-while idx < len(lst) {
-  print("while idx:", idx);
-  idx = idx + 1;
+// --------------------------------------------------
+// 12. Shadowing and scopes
+// --------------------------------------------------
+
+let x: number = 10
+def shadowTest(x: number) {
+  print("shadow param x:", x)        // Expect: param value
+  let x: number = x + 1
+  print("shadow inner x:", x)        // Expect: param+1
+  return x
+}
+print("shadowTest:", shadowTest(3))   // Expect: prints 3,4 and returns 4
+print("outer x unchanged:", x)         // Expect: 10
+
+// --------------------------------------------------
+// 13. While loop with break condition simulated via return inside lambda
+// --------------------------------------------------
+
+// There is no `break`, but can simulate early exit by returning from function.
+// We'll test a function that sums until a threshold.
+def sumUntil(thresh: number) {
+  let total: number = 0
+  let i: number = 1
+  while (i <= 10) {
+    if (total + i > thresh) {
+      return total
+    }
+    total = total + i
+    i = i + 1
+  }
+  return total
+}
+print("sumUntil(5):", sumUntil(5))   // 1+2=3, next 3+3=6>5 so return 3
+print("sumUntil(100):", sumUntil(100)) // sum 1..10 = 55
+
+// --------------------------------------------------
+// 14. Nested functions and closures
+// --------------------------------------------------
+
+def outer(x: number) {
+  def inner(y: number) {
+    return x + y
+  }
+  return inner
+}
+let add5 = outer(5)
+print("outer closure add5(7):", add5(7))  // Expect: 12
+
+// --------------------------------------------------
+// 15. Complex data structure manipulations
+// --------------------------------------------------
+
+// Suppose we have a list of user records with nested maps and lists
+let users: list = [
+  {"name": "Alice", "scores": [90, 85, 92]},
+  {"name": "Bob", "scores": [70, 75]},
+  {"name": "Carol", "scores": []}
+]
+
+// Compute average if scores non-empty, else 0
+def avg(lst: list) {
+  if (len(lst) == 0) {
+    return 0
+  }
+  return sum(lst) / len(lst)
 }
 
-// 12. Map literal syntax and indexing
-let mapLit = { a: 1, b: 2, c: 3 };
-print("mapLit:", mapLit);
-print("mapLit['b']:", mapLit["b"]);   // 2
-print("mapLit.a:", mapLit.a);         // if dot-access supported; if not, skip or comment out
+let userAvgs: list = map(forge(u) -> {
+  let a: number = avg(u["scores"])
+  return {"name": u["name"], "avg": a}
+}, users)
+print("userAvgs:", userAvgs)
+// Expect: [{"name":"Alice","avg":~89}, {"name":"Bob","avg":72.5}, {"name":"Carol","avg":0}]
 
-// 13. Builtin HashMap usage
-let hm = HashMap();                   // assume builtin constructor
-hm.put("one", 1);
-hm.put("two", 2);
-hm.put("three", 3);
-print("hm.get('two'):", hm.get("two")); // 2
-print("hm.contains('two'):", hm.contains("two")); // true
-print("hm.size():", hm.size());       // 3
-hm.remove("two");
-print("hm.contains('two') after remove:", hm.contains("two")); // false
-print("hm.get('two') after remove:", hm.get("two"));           // null or error depending on implementation
+// Filter those above threshold
+let goodUsers: list = filter(forge(u) -> { u["avg"] >= 80 }, userAvgs)
+print("goodUsers:", goodUsers)  
+// Expect: [{"name":"Alice","avg":~89}]
 
-// 14. Higher-order functions
-def applyTwice(f, x) {
-  return f(f(x));
+// Nested pipeline example: for each user, for each score, produce score difference from avg
+let diffs: list = map(forge(u) -> {
+  let a: number = avg(u["scores"])
+  return map(forge(s) -> { s - a }, u["scores"])
+}, users)
+print("score diffs:", diffs)  
+// Expect: [[1, -4, 3], [-2.5, 2.5], []]
+
+// --------------------------------------------------
+// 16. Empty lambda / zero-arg lambda in pipelines
+// --------------------------------------------------
+
+// Generate a list of zero functions, then call them
+let zeros: list = [1, 2, 3]
+let zeroFuncs: list = map(forge(x) -> { forge() -> { 0 } }, zeros)
+let zeroResults: list = map(forge(f) -> { f() }, zeroFuncs)
+print("zeroResults:", zeroResults)  // Expect: [0,0,0]
+
+// --------------------------------------------------
+// 17. Deep nesting and recursion: tree traversal
+// --------------------------------------------------
+
+// Represent a simple tree as nested maps: { "value": n, "children": [ ... ] }
+let tree: map = {
+  "value": 1,
+  "children": [
+    {"value": 2, "children": [
+      {"value": 4, "children": []},
+      {"value": 5, "children": []}
+    ]},
+    {"value": 3, "children": [
+      {"value": 6, "children": []}
+    ]}
+  ]
 }
-let inc = Forge(x): x + 1;
-print("applyTwice(inc, 5):", applyTwice(inc, 5)); // 7
 
-// 15. Assigning function expressions to variables
-let mul2 = Def(x) {
-  return x * 2;
-};
-print("mul2(7):", mul2(7));            // 14
+// Recursively collect all values in the tree
+def collectValues(node) {
+  // node is a map
+  let vals: list = [node["value"]]
+  let children: list = node["children"]
+  // For each child, collect values and concatenate
+  let childVals: list = []
+  for (c in children) {
+    childVals = childVals + collectValues(c)
+  }
+  return vals + childVals
+}
+print("tree values:", collectValues(tree))  
+// Expect: [1,2,4,5,3,6] (pre-order)
 
-// 16. Nested scopes and closures
-def outer() {
-  let outerVal = 100;
+// Sum of all values in tree via recursion
+def sumTree(node) {
+  let total: number = node["value"]
+  for (c in node["children"]) {
+    total = total + sumTree(c)
+  }
+  return total
+}
+print("sumTree:", sumTree(tree))  // Expect: 1+2+4+5+3+6 = 21
+
+// --------------------------------------------------
+// 18. Shadowing with nested functions/lambdas
+// --------------------------------------------------
+
+let g: number = 10
+def testShadow() {
+  let g: number = 20
   def inner() {
-    return outerVal + 1;
+    let g: number = 30
+    return g
   }
-  return inner();
+  let f = forge() -> { g }  // Captures g from outer scope of testShadow (20)
+  print("inner returns:", inner())   // Expect: 30
+  print("lambda captures:", f())     // Expect: 20
+  return g
 }
-print("outer():", outer());            // 101
+print("testShadow returns:", testShadow())  // Expect prints and returns 20
+print("global g:", g)                      // Expect: 10
 
-// 17. Conditional without else
-def checkPositive(n) {
-  if n > 0 {
-    print(n, "is positive");
-  }
-  // no explicit return here; returns null implicitly
-}
-checkPositive(5);
-let ret = checkPositive(-3);
-print("checkPositive(-3) returns:", ret); // null
+// --------------------------------------------------
+// 19. Testing range builtin
+// --------------------------------------------------
 
-// 18. Complex expression chaining
-let complex = ((a + b) * (factorial(3))) / 2 - (len(lst) || 0);
-print("complex:", complex);
+print("range(0,5):", range(0, 5))   // Expect: [0,1,2,3,4]
+print("range(3):", range(3))       // Expect: [0,1,2]
+print("range(2,8,2):", range(2, 8, 2)) // Expect: [2,4,6]
 
-// 19. Boolean and/or short-circuit
-// Assuming Klang uses lazy evaluation: in `false && expr`, expr not evaluated; in `true || expr`, expr not evaluated
-def sideEffect() {
-  print("sideEffect called");
-  return true;
-}
-print("false && sideEffect():", false && sideEffect()); // should not print "sideEffect called"
-print("true || sideEffect():", true || sideEffect());   // should not print "sideEffect called"
+// --------------------------------------------------
+// 20. Complex combined usage in one expression
+// --------------------------------------------------
 
-// 20. Mixing map literal with built-in HashMap
-let mapFromLit = HashMap();
-for entry in ["a","b","c"] {
-  mapFromLit.put(entry, mapLit[entry]);
-}
-print("mapFromLit.get('c'):", mapFromLit.get("c")); // 3
+// Compute sum of squares of odd numbers from 1..10
+let result: list = map(forge(x) -> { x * x },
+                  filter(forge(x) -> { x % 2 == 1 },
+                         range(1, 11)))
+// Expect odd numbers [1,3,5,7,9] squared [1,9,25,49,81]
+print("sum squares odds:", sum(result))  // Expect: 165
 
-// 21. Optional: demonstrate mutate list
-let mutableList = [10, 20, 30];
-mutableList[1] = 25;                   // if assignment to index supported
-print("mutableList after assignment:", mutableList);
+// --------------------------------------------------
+// 21. Testing empty map/list edge behavior
+// --------------------------------------------------
 
-// 22. Edge: empty list and empty map
-let emptyList = [];
-print("emptyList:", emptyList, "len:", len(emptyList), "sum:", sum(emptyList));
-let emptyMap = HashMap();
-print("emptyMap.size():", emptyMap.size(), "contains 'x':", emptyMap.contains("x"));
+let emptyM: map = {}
+print("emptyM:", emptyM)             // Expect: {}
+print("emptyM['foo']:", emptyM["foo"]) // Expect: null
 
-// 23. Lambda shorthand in complex context
-let dblAndAdd = Forge(x, y): x * 2 + y;
-print("dblAndAdd(3,4):", dblAndAdd(3, 4)); // 10
+let emptyLst2: list = []
+print("filter(empty):", filter(forge(x) -> { true }, emptyLst2)) // Expect: []
+print("map(empty):", map(forge(x) -> { x * 2 }, emptyLst2))      // Expect: []
 
-// 24. Combining filter/map inline
-let filteredMapped = map(filter(range(1, 11), Forge(x): x % 2 == 1), Forge(x): x * x);
-print("filteredMapped (odd squares 1..10):", filteredMapped);
+// --------------------------------------------------
+// 22. Error tests (uncomment one at a time)
+// --------------------------------------------------
 
+// Semicolon error:
+// let x = 1;                       // Parse error: semicolons not allowed
+
+// Assign to final:
+// final y: number = 5
+// y = 6                          // Runtime error: cannot assign to constant
+
+// Type error in def or lambda:
+// def wrong(x: number) { return x + "str" }   // Runtime type mismatch
+// let badLambda = forge(x: string) -> { x * 2 }  // Runtime mismatch if x not string
+// let badCall = add("a", "b")                 // Runtime error: add expects numbers
+
+// Index errors:
+// print(lst[100])                 // Runtime error: index out of bounds
+// print((5)[0])                   // Runtime error: cannot index into non-list/string/map
+
+// --------------------------------------------------
 // End of comprehensive test
+// --------------------------------------------------
+
+
+
+
+
+

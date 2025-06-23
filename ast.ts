@@ -1,6 +1,8 @@
 // ast.ts
 
-// ─── Token Types ─────────────────────────────────────────────────────────────
+// ─── Token Types & Token ─────────────────────────────────────────────────────
+
+// All token types used by the lexer and parser:
 export enum TokenType {
   // Single-character tokens
   OpenParen, // (
@@ -11,118 +13,430 @@ export enum TokenType {
   CloseBracket, // ]
   Comma, // ,
   Colon, // :
+  Dot, // .
+  Minus, // -
+  Plus, // +
   Semicolon, // ;
+  Slash, // /
+  Star, // *
+  Percent, // %   <-- keep as in your old AST
 
   // One- or two-character tokens
-  Equals, // =
-  DoubleEquals, // ==
-  NotEquals, // !=
-  Less, // <
-  LessEqual, // <=
+  Bang, // !
+  BangEqual, // !=
+  Equal, // =
+  EqualEqual, // ==
   Greater, // >
   GreaterEqual, // >=
-  Plus, // +
-  Minus, // -
-  Star, // *
-  Slash, // /
-  Percent, // %
-  And, // &&
-  Or, // ||
-  Dot, // .
-  Bang, // !
+  Less, // <
+  LessEqual, // <=
 
   // Literals
   Identifier, // names
-  Number, // numeric literals
-  String, // string literals
+  String, // string literal (e.g. "foo")
+  Number, // number literal (e.g. 123, 4.5)
 
   // Keywords
-  Let, // let
-  Final, // final
-  Def, // def
+  And, // and
+  Or, // or
   If, // if
   Else, // else
   While, // while
   For, // for
-  Return, // return
   In, // in
+  Return, // return
+  Let, // let
+  Final, // final
+  Def, // def
+  Forge, // forge (lambda)
+  True, // true
+  False, // false
 
-  // Special
-  EOF,
+  EOF, // end of file/input
 }
 
-// ─── Token ────────────────────────────────────────────────────────────────────
+// Token interface returned by the lexer:
 export interface Token {
   type: TokenType;
   value: string;
+  // (optional) you can add line/column properties here if you track them.
 }
 
-// ─── AST Node Kinds ──────────────────────────────────────────────────────────
+// ─── Lexer / Tokenizer ──────────────────────────────────────────────────
+
+/**
+ * Lexical scanner: convert source string into an array of Tokens.
+ * This handles:
+ * - Whitespace skipping
+ * - Identifiers and keywords
+ * - Number literals (integer and decimals)
+ * - String literals (double-quoted, with basic escape support)
+ * - Operators and punctuation, including two-character operators: !=, ==, >=, <=
+ * - Single-character tokens: parentheses, braces, brackets, comma, colon, dot, semicolon, plus, minus, star, slash, percent, etc.
+ * - Keywords: and, or, if, else, while, for, in, return, let, final, def, forge, true, false
+ * - Comments: // single-line, /* block *​/
+ *
+ * Returns a Token[] ending with an EOF token.
+ */
+export function tokenize(source: string): Token[] {
+  const tokens: Token[] = [];
+  let start = 0;
+  let current = 0;
+  const length = source.length;
+
+  function isAtEnd(): boolean {
+    return current >= length;
+  }
+
+  function advance(): string {
+    return source.charAt(current++);
+  }
+
+  function peek(): string {
+    return isAtEnd() ? "\0" : source.charAt(current);
+  }
+
+  function peekNext(): string {
+    return current + 1 >= length ? "\0" : source.charAt(current + 1);
+  }
+
+  function addToken(type: TokenType, value: string = ""): void {
+    tokens.push({ type, value });
+  }
+
+  function match(expected: string): boolean {
+    if (isAtEnd()) return false;
+    if (source.charAt(current) !== expected) return false;
+    current++;
+    return true;
+  }
+
+  function skipWhitespace(): void {
+    while (!isAtEnd()) {
+      const c = peek();
+      if (c === " " || c === "\r" || c === "\t" || c === "\n") {
+        advance();
+      } else if (c === "/" && peekNext() === "/") {
+        // single-line comment
+        while (peek() !== "\n" && !isAtEnd()) advance();
+      } else if (c === "/" && peekNext() === "*") {
+        // block comment
+        advance(); // '/'
+        advance(); // '*'
+        while (!(peek() === "*" && peekNext() === "/") && !isAtEnd()) {
+          advance();
+        }
+        if (!isAtEnd()) {
+          advance(); // '*'
+          advance(); // '/'
+        }
+      } else {
+        break;
+      }
+    }
+  }
+
+  function stringLiteral(): void {
+    // Starting quote already consumed
+    let value = "";
+    while (peek() !== '"' && !isAtEnd()) {
+      if (peek() === "\\") {
+        advance();
+        const esc = peek();
+        switch (esc) {
+          case '"':
+            value += '"';
+            break;
+          case "\\":
+            value += "\\";
+            break;
+          case "n":
+            value += "\n";
+            break;
+          case "r":
+            value += "\r";
+            break;
+          case "t":
+            value += "\t";
+            break;
+          default:
+            value += esc;
+            break;
+        }
+        advance();
+      } else {
+        value += advance();
+      }
+    }
+    if (isAtEnd()) {
+      throw new Error("Unterminated string literal");
+    }
+    advance(); // closing "
+    addToken(TokenType.String, value);
+  }
+
+  function numberLiteral(firstDigit: string): void {
+    let numStr = firstDigit;
+    // integer part
+    while (/\d/.test(peek())) {
+      numStr += advance();
+    }
+    // fraction
+    if (peek() === "." && /\d/.test(peekNext())) {
+      numStr += advance(); // '.'
+      while (/\d/.test(peek())) {
+        numStr += advance();
+      }
+    }
+    addToken(TokenType.Number, numStr);
+  }
+
+  function identifierOrKeyword(firstChar: string): void {
+    let text = firstChar;
+    while (/[A-Za-z0-9_]/.test(peek())) {
+      text += advance();
+    }
+    // Check for keywords (case-sensitive)
+    switch (text) {
+      case "and":
+        addToken(TokenType.And, text);
+        return;
+      case "or":
+        addToken(TokenType.Or, text);
+        return;
+      case "if":
+        addToken(TokenType.If, text);
+        return;
+      case "else":
+        addToken(TokenType.Else, text);
+        return;
+      case "while":
+        addToken(TokenType.While, text);
+        return;
+      case "for":
+        addToken(TokenType.For, text);
+        return;
+      case "in":
+        addToken(TokenType.In, text);
+        return;
+      case "return":
+        addToken(TokenType.Return, text);
+        return;
+      case "let":
+        addToken(TokenType.Let, text);
+        return;
+      case "final":
+        addToken(TokenType.Final, text);
+        return;
+      case "def":
+        addToken(TokenType.Def, text);
+        return;
+      case "forge":
+        addToken(TokenType.Forge, text);
+        return;
+      case "true":
+        addToken(TokenType.True, text);
+        return;
+      case "false":
+        addToken(TokenType.False, text);
+        return;
+      default:
+        addToken(TokenType.Identifier, text);
+        return;
+    }
+  }
+
+  while (!isAtEnd()) {
+    skipWhitespace();
+    if (isAtEnd()) break;
+    start = current;
+    const c = advance();
+    switch (c) {
+      // Single-character tokens
+      case "(":
+        addToken(TokenType.OpenParen, c);
+        break;
+      case ")":
+        addToken(TokenType.CloseParen, c);
+        break;
+      case "{":
+        addToken(TokenType.OpenBrace, c);
+        break;
+      case "}":
+        addToken(TokenType.CloseBrace, c);
+        break;
+      case "[":
+        addToken(TokenType.OpenBracket, c);
+        break;
+      case "]":
+        addToken(TokenType.CloseBracket, c);
+        break;
+      case ",":
+        addToken(TokenType.Comma, c);
+        break;
+      case ":":
+        addToken(TokenType.Colon, c);
+        break;
+      case ".":
+        addToken(TokenType.Dot, c);
+        break;
+      case ";":
+        addToken(TokenType.Semicolon, c);
+        break;
+      case "+":
+        addToken(TokenType.Plus, c);
+        break;
+      case "-":
+        // Could be minus or arrow '->' if next is '>'
+        if (peek() === ">") {
+          advance();
+          addToken(TokenType.Arrow, "->");
+        } else {
+          addToken(TokenType.Minus, c);
+        }
+        break;
+      case "*":
+        addToken(TokenType.Star, c);
+        break;
+      case "/":
+        addToken(TokenType.Slash, c);
+        break;
+      case "%":
+        addToken(TokenType.Percent, c);
+        break;
+
+      // One- or two-character tokens
+      case "!":
+        if (match("=")) {
+          addToken(TokenType.BangEqual, "!=");
+        } else {
+          addToken(TokenType.Bang, "!");
+        }
+        break;
+      case "=":
+        if (match("=")) {
+          addToken(TokenType.EqualEqual, "==");
+        } else {
+          addToken(TokenType.Equal, "=");
+        }
+        break;
+      case "<":
+        if (match("=")) {
+          addToken(TokenType.LessEqual, "<=");
+        } else {
+          addToken(TokenType.Less, "<");
+        }
+        break;
+      case ">":
+        if (match("=")) {
+          addToken(TokenType.GreaterEqual, ">=");
+        } else {
+          addToken(TokenType.Greater, ">");
+        }
+        break;
+
+      // String literal
+      case '"':
+        stringLiteral();
+        break;
+
+      default:
+        if (/\d/.test(c)) {
+          numberLiteral(c);
+        } else if (/[A-Za-z_]/.test(c)) {
+          identifierOrKeyword(c);
+        } else {
+          throw new Error(`Unexpected character: '${c}'`);
+        }
+        break;
+    }
+  }
+
+  // Append EOF token
+  addToken(TokenType.EOF, "");
+  return tokens;
+}
+
+// ─── AST Node Types ──────────────────────────────────────────────────────
+
+// Top-level program
+export interface Program {
+  kind: "Program";
+  body: Statement[];
+}
 
 // Statements
 export type Statement =
   | ExpressionStatement
   | VarDeclaration
   | FunctionDeclaration
-  | ReturnStatement
+  | BlockStatement
   | IfStatement
   | WhileStatement
   | ForStatement
-  | BlockStatement;
+  | ReturnStatement;
 
-export interface Program {
-  kind: "Program";
-  body: Statement[];
-}
-
+// Expression statement: a bare expression as a statement
 export interface ExpressionStatement {
   kind: "ExpressionStatement";
   expression: Expression;
 }
 
+// Variable declaration: let/ final
 export interface VarDeclaration {
   kind: "VarDeclaration";
   identifier: string;
   value: Expression;
-  isFinal?: boolean;
-  varType?: string;
+  varType?: string; // optional type annotation, e.g. ": int"
+  isFinal?: boolean; // true if declared with 'final'
+}
+
+// Function declaration: def name(params) { body }
+export interface Parameter {
+  name: string;
+  paramType?: string; // optional type annotation on parameter
 }
 
 export interface FunctionDeclaration {
   kind: "FunctionDeclaration";
   name: string;
-  parameters: string[];
+  parameters: Parameter[];
   body: BlockStatement;
 }
 
-export interface ReturnStatement {
-  kind: "ReturnStatement";
-  value: Expression;
+// Block statement: { ... }
+export interface BlockStatement {
+  kind: "Block";
+  body: Statement[];
 }
 
+// If statement: if (condition) { thenBranch } [else { elseBranch }]
 export interface IfStatement {
   kind: "IfStatement";
   condition: Expression;
-  thenBranch: Statement;
-  elseBranch?: Statement;
+  thenBranch: BlockStatement;
+  elseBranch?: BlockStatement;
 }
 
+// While statement: while (condition) { body }
 export interface WhileStatement {
   kind: "WhileStatement";
   condition: Expression;
-  body: Statement;
+  body: BlockStatement;
 }
 
+// For statement: for (iterator in range) { body }
 export interface ForStatement {
   kind: "ForStatement";
   iterator: string;
   range: Expression;
-  body: Statement;
+  body: BlockStatement;
 }
 
-export interface BlockStatement {
-  kind: "Block";
-  body: Statement[];
+// Return statement: return expr
+export interface ReturnStatement {
+  kind: "ReturnStatement";
+  value: Expression;
 }
 
 // Expressions
@@ -131,312 +445,95 @@ export type Expression =
   | NumericLiteral
   | StringLiteral
   | BooleanLiteral
+  | UnaryExpression
+  | BinaryExpression
+  | AssignmentExpression
+  | CallExpression
+  | IndexExpression
   | ListLiteral
   | MapLiteral
-  | BinaryExpression
-  | UnaryExpression
-  | CallExpression
-  | FunctionExpression
-  | AssignmentExpression
-  | IndexExpression
-  | MemberExpression;
+  | FunctionExpression;
 
+// Identifier: variable or function name
 export interface Identifier {
   kind: "Identifier";
   symbol: string;
 }
 
+// Numeric literal
 export interface NumericLiteral {
   kind: "NumericLiteral";
   value: number;
 }
 
+// String literal
 export interface StringLiteral {
   kind: "StringLiteral";
   value: string;
 }
 
+// Boolean literal
 export interface BooleanLiteral {
   kind: "BooleanLiteral";
   value: boolean;
 }
 
-export interface ListLiteral {
-  kind: "ListLiteral";
-  elements: Expression[];
+// Unary expression: !expr or -expr
+export interface UnaryExpression {
+  kind: "UnaryExpression";
+  operator: string; // "!" or "-"
+  right: Expression;
 }
 
-export interface MapLiteral {
-  kind: "MapLiteral";
-  entries: { key: string; value: Expression }[];
-}
-
+// Binary expression
 export interface BinaryExpression {
   kind: "BinaryExpr";
   left: Expression;
-  right: Expression;
-  operator: string;
-}
-
-export interface UnaryExpression {
-  kind: "UnaryExpression";
-  operator: string;
+  operator: string; // "+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">=", "and"/"or", etc.
   right: Expression;
 }
 
+// Assignment expression: assignee = value
+export interface AssignmentExpression {
+  kind: "AssignmentExpr";
+  // Allow either Identifier or IndexExpression as assignee
+  assignee: Identifier | IndexExpression;
+  value: Expression;
+}
+
+// Call expression: caller(args...)
 export interface CallExpression {
   kind: "CallExpr";
   caller: Expression;
   arguments: Expression[];
 }
 
-export interface FunctionExpression {
-  kind: "FunctionExpression";
-  parameters: string[];
-  body: BlockStatement;
-}
-
-export interface AssignmentExpression {
-  kind: "AssignmentExpr";
-  assignee: Identifier;
-  value: Expression;
-}
-
+// Index expression: target[index]
 export interface IndexExpression {
   kind: "IndexExpr";
   target: Expression;
   index: Expression;
 }
 
-export interface MemberExpression {
-  kind: "MemberExpr";
-  object: Expression;
-  property: string;
+// List literal: [elem1, elem2, ...]
+export interface ListLiteral {
+  kind: "ListLiteral";
+  elements: Expression[];
 }
 
-// ─── Lexer / Tokenizer ─────────────────────────────────────────────────────────
+// Map literal: { "key": valueExpr, ... }
+export interface MapEntry {
+  key: string;
+  value: Expression;
+}
+export interface MapLiteral {
+  kind: "MapLiteral";
+  entries: MapEntry[];
+}
 
-const KEYWORDS: Record<string, TokenType> = {
-  let: TokenType.Let,
-  final: TokenType.Final,
-  def: TokenType.Def,
-  if: TokenType.If,
-  else: TokenType.Else,
-  while: TokenType.While,
-  for: TokenType.For,
-  return: TokenType.Return,
-  in: TokenType.In,
-};
-
-export function tokenize(input: string): Token[] {
-  const tokens: Token[] = [];
-  let i = 0;
-
-  const isAlpha = (ch: string) => /[a-zA-Z_]/.test(ch);
-  const isAlphaNumeric = (ch: string) => /[a-zA-Z0-9_]/.test(ch);
-  const isDigit = (ch: string) => /[0-9]/.test(ch);
-
-  while (i < input.length) {
-    const char = input[i];
-
-    // Whitespace
-    if (/\s/.test(char)) {
-      i++;
-      continue;
-    }
-
-    // Comments
-    if (char === "/" && input[i + 1] === "/") {
-      i += 2;
-      while (i < input.length && input[i] !== "\n") i++;
-      continue;
-    }
-    if (char === "/" && input[i + 1] === "*") {
-      i += 2;
-      while (i < input.length && !(input[i] === "*" && input[i + 1] === "/")) {
-        i++;
-      }
-      i += 2; // skip "*/"
-      continue;
-    }
-
-    // Strings (double-quoted)
-    if (char === '"') {
-      i++;
-      let value = "";
-      while (i < input.length && input[i] !== '"') {
-        if (input[i] === "\\" && i + 1 < input.length) {
-          const next = input[i + 1];
-          if (next === '"' || next === "\\") {
-            value += next;
-            i += 2;
-            continue;
-          }
-        }
-        value += input[i++];
-      }
-      i++; // consume closing "
-      tokens.push({ type: TokenType.String, value });
-      continue;
-    }
-
-    // Numbers starting with digit, possibly containing a single dot
-    if (isDigit(char)) {
-      let num = "";
-      let hasDot = false;
-      while (i < input.length && /[0-9.]/.test(input[i])) {
-        if (input[i] === ".") {
-          if (hasDot) break; // second dot ends numeric literal
-          hasDot = true;
-        }
-        num += input[i++];
-      }
-      tokens.push({ type: TokenType.Number, value: num });
-      continue;
-    }
-
-    // Leading fractional: .5
-    if (char === "." && i + 1 < input.length && isDigit(input[i + 1])) {
-      let num = "0.";
-      i++;
-      while (i < input.length && isDigit(input[i])) {
-        num += input[i++];
-      }
-      tokens.push({ type: TokenType.Number, value: num });
-      continue;
-    }
-
-    // Identifiers and Keywords
-    if (isAlpha(char)) {
-      let ident = "";
-      while (i < input.length && isAlphaNumeric(input[i])) {
-        ident += input[i++];
-      }
-      const keyword = KEYWORDS[ident];
-      if (keyword !== undefined) {
-        tokens.push({ type: keyword, value: ident });
-      } else {
-        tokens.push({ type: TokenType.Identifier, value: ident });
-      }
-      continue;
-    }
-
-    // Two-character operators: ==, !=, <=, >=, &&, ||
-    if (char === "=" && input[i + 1] === "=") {
-      tokens.push({ type: TokenType.DoubleEquals, value: "==" });
-      i += 2;
-      continue;
-    }
-    if (char === "!" && input[i + 1] === "=") {
-      tokens.push({ type: TokenType.NotEquals, value: "!=" });
-      i += 2;
-      continue;
-    }
-    if (char === "<" && input[i + 1] === "=") {
-      tokens.push({ type: TokenType.LessEqual, value: "<=" });
-      i += 2;
-      continue;
-    }
-    if (char === ">" && input[i + 1] === "=") {
-      tokens.push({ type: TokenType.GreaterEqual, value: ">=" });
-      i += 2;
-      continue;
-    }
-    if (char === "&" && input[i + 1] === "&") {
-      tokens.push({ type: TokenType.And, value: "&&" });
-      i += 2;
-      continue;
-    }
-    if (char === "|" && input[i + 1] === "|") {
-      tokens.push({ type: TokenType.Or, value: "||" });
-      i += 2;
-      continue;
-    }
-
-    // Single-character tokens
-    switch (char) {
-      case "(":
-        tokens.push({ type: TokenType.OpenParen, value: "(" });
-        i++;
-        break;
-      case ")":
-        tokens.push({ type: TokenType.CloseParen, value: ")" });
-        i++;
-        break;
-      case "{":
-        tokens.push({ type: TokenType.OpenBrace, value: "{" });
-        i++;
-        break;
-      case "}":
-        tokens.push({ type: TokenType.CloseBrace, value: "}" });
-        i++;
-        break;
-      case "[":
-        tokens.push({ type: TokenType.OpenBracket, value: "[" });
-        i++;
-        break;
-      case "]":
-        tokens.push({ type: TokenType.CloseBracket, value: "]" });
-        i++;
-        break;
-      case ",":
-        tokens.push({ type: TokenType.Comma, value: "," });
-        i++;
-        break;
-      case ":":
-        tokens.push({ type: TokenType.Colon, value: ":" });
-        i++;
-        break;
-      case ";":
-        tokens.push({ type: TokenType.Semicolon, value: ";" });
-        i++;
-        break;
-      case "+":
-        tokens.push({ type: TokenType.Plus, value: "+" });
-        i++;
-        break;
-      case "-":
-        tokens.push({ type: TokenType.Minus, value: "-" });
-        i++;
-        break;
-      case "*":
-        tokens.push({ type: TokenType.Star, value: "*" });
-        i++;
-        break;
-      case "%":
-        tokens.push({ type: TokenType.Percent, value: "%" });
-        i++;
-        break;
-      case "/":
-        tokens.push({ type: TokenType.Slash, value: "/" });
-        i++;
-        break;
-      case "=":
-        tokens.push({ type: TokenType.Equals, value: "=" });
-        i++;
-        break;
-      case "!":
-        tokens.push({ type: TokenType.Bang, value: "!" });
-        i++;
-        break;
-      case "<":
-        tokens.push({ type: TokenType.Less, value: "<" });
-        i++;
-        break;
-      case ">":
-        tokens.push({ type: TokenType.Greater, value: ">" });
-        i++;
-        break;
-      case ".":
-        // standalone dot → member-access or error if stray
-        tokens.push({ type: TokenType.Dot, value: "." });
-        i++;
-        break;
-      default:
-        throw new Error(`Unexpected character '${char}' at position ${i}`);
-    }
-  }
-
-  tokens.push({ type: TokenType.EOF, value: "EOF" });
-  return tokens;
+// Lambda expression: forge(params) -> { body } or forge(params) { body }
+export interface FunctionExpression {
+  kind: "FunctionExpression";
+  parameters: Parameter[];
+  body: BlockStatement;
 }

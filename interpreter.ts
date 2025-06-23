@@ -8,11 +8,13 @@ import {
   StringLiteral,
   BooleanLiteral,
   Identifier,
-  BinaryExpression,
   UnaryExpression,
+  BinaryExpression,
+  AssignmentExpression,
+  CallExpression,
+  IndexExpression,
   ListLiteral,
   MapLiteral,
-  CallExpression,
   FunctionDeclaration,
   FunctionExpression,
   IfStatement,
@@ -20,8 +22,9 @@ import {
   ForStatement,
   ReturnStatement,
   BlockStatement,
-  AssignmentExpression,
-  IndexExpression,
+  VarDeclaration,
+  Parameter,
+  // MapEntry not needed here
 } from "./ast.ts";
 
 import {
@@ -38,130 +41,287 @@ import {
   enforceType,
 } from "./environment.ts";
 
-// ─── Runtime Helpers ──────────────────────────────────────────────────────────
+// Singleton null value
+const NULL_VAL: NullVal = { type: "null", value: null };
 
-// A singleton null value
-const NULL: NullVal = { type: "null", value: null };
-
-// Evaluate a Program: run each top-level statement in the given environment
-function evalProgram(program: Program, env: Environment): RuntimeVal {
-  let last: RuntimeVal = NULL;
-  for (const stmt of program.body) {
-    last = evaluate(stmt, env);
-  }
-  return last;
+// -----------------------------------------------------------------------------
+// ReturnSignal: used to unwind out of nested statements when a return is encountered
+// -----------------------------------------------------------------------------
+class ReturnSignal {
+  constructor(public value: RuntimeVal) {}
 }
 
-// Evaluate a block of statements. Caller should create a new Environment if needed.
-function evalBlock(block: BlockStatement, env: Environment): RuntimeVal {
-  let result: RuntimeVal = NULL;
-  for (const stmt of block.body) {
-    result = evaluate(stmt, env);
-    // If this statement is a ReturnStatement, we bail out immediately.
-    if (stmt.kind === "ReturnStatement") {
-      return result;
+// Type guards for Expression variants
+function isIdentifier(e: Expression): e is Identifier {
+  return e.kind === "Identifier";
+}
+function isIndexExpression(e: Expression): e is IndexExpression {
+  return e.kind === "IndexExpr";
+}
+
+/**
+ * Main evaluate entry: can be Program, Statement, or Expression.
+ */
+export function evaluate(
+  node: Program | Statement | Expression,
+  env: Environment
+): RuntimeVal {
+  switch ((node as any).kind) {
+    case "Program":
+      return evalProgram(node as Program, env);
+
+    case "Block":
+      return evalBlock(node as BlockStatement, env);
+
+    case "ExpressionStatement":
+      return evaluate((node as any).expression as Expression, env);
+
+    case "VarDeclaration":
+      return evalVarDeclaration(node as VarDeclaration, env);
+
+    case "FunctionDeclaration":
+      return evalFunctionDeclaration(node as FunctionDeclaration, env);
+
+    case "FunctionExpression":
+      return evalFunctionExpression(node as FunctionExpression, env);
+
+    case "ReturnStatement":
+      return evalReturnStatement(node as ReturnStatement, env);
+
+    case "IfStatement":
+      return evalIfStatement(node as IfStatement, env);
+
+    case "WhileStatement":
+      return evalWhileStatement(node as WhileStatement, env);
+
+    case "ForStatement":
+      return evalForStatement(node as ForStatement, env);
+
+    // Expressions:
+    case "NumericLiteral":
+      return { type: "number", value: (node as NumericLiteral).value };
+
+    case "StringLiteral":
+      return { type: "string", value: (node as StringLiteral).value };
+
+    case "BooleanLiteral":
+      return { type: "boolean", value: (node as BooleanLiteral).value };
+
+    case "Identifier":
+      return evalIdentifier(node as Identifier, env);
+
+    case "UnaryExpression":
+      return evalUnary(node as UnaryExpression, env);
+
+    case "BinaryExpr":
+      return evalBinary(node as BinaryExpression, env);
+
+    case "AssignmentExpr":
+      return evalAssignment(node as AssignmentExpression, env);
+
+    case "CallExpr":
+      return evalCall(node as CallExpression, env);
+
+    case "IndexExpr":
+      return evalIndex(node as IndexExpression, env);
+
+    case "ListLiteral":
+      return evalListLiteral(node as ListLiteral, env);
+
+    case "MapLiteral":
+      return evalMapLiteral(node as MapLiteral, env);
+
+    default:
+      throw new Error(`Unknown AST node kind: ${(node as any).kind}`);
+  }
+}
+
+// ─── Statement evaluation ──────────────────────────────────────────
+
+function evalProgram(prog: Program, env: Environment): RuntimeVal {
+  // If you wish to allow top-level 'return', catch ReturnSignal here.
+  // Otherwise you can remove the try/catch and let top-level return be an error.
+  try {
+    let result: RuntimeVal = NULL_VAL;
+    for (const stmt of prog.body) {
+      result = evaluate(stmt, env);
     }
+    return result;
+  } catch (e) {
+    if (e instanceof ReturnSignal) {
+      // Unwrap top-level return
+      return e.value;
+    }
+    throw e;
+  }
+}
+
+function evalBlock(block: BlockStatement, env: Environment): RuntimeVal {
+  // Do NOT catch ReturnSignal here; let it propagate to the function-call boundary.
+  const localEnv = new Environment(env);
+  let result: RuntimeVal = NULL_VAL;
+  for (const stmt of block.body) {
+    result = evaluate(stmt, localEnv);
+    // If a ReturnSignal is thrown inside evaluate(stmt,...), it propagates out of this function immediately.
   }
   return result;
 }
 
-// Evaluate list literal
-function evalListLiteral(node: ListLiteral, env: Environment): RuntimeVal {
-  const elements: RuntimeVal[] = [];
-  for (const el of node.elements) {
-    elements.push(evaluate(el, env));
+function evalVarDeclaration(
+  decl: VarDeclaration,
+  env: Environment
+): RuntimeVal {
+  // Support recursive lambdas: if RHS is a FunctionExpression, pre-declare name first
+  if (decl.value.kind === "FunctionExpression") {
+    // Pre-declare with a placeholder so closure captures the name
+    env.declareVar(
+      decl.identifier,
+      NULL_VAL,
+      decl.isFinal ?? false,
+      decl.varType
+    );
+    // Now evaluate the FunctionExpression, which captures env including this binding
+    const fnVal = evaluate(decl.value, env) as FunctionVal;
+    // Assign the real function value
+    env.assignVar(decl.identifier, fnVal);
+    return fnVal;
   }
-  return { type: "list", elements };
+  // Normal path
+  const value = evaluate(decl.value, env);
+  if (decl.varType) {
+    enforceType(value, decl.varType);
+  }
+  env.declareVar(decl.identifier, value, decl.isFinal ?? false, decl.varType);
+  return value;
 }
 
-// Evaluate map literal
-function evalMapLiteral(node: MapLiteral, env: Environment): RuntimeVal {
-  const resultMap = new Map<string, RuntimeVal>();
-  for (const entry of node.entries) {
-    const val = evaluate(entry.value, env);
-    resultMap.set(entry.key, val);
-  }
-  return { type: "map", map: resultMap };
+function evalFunctionDeclaration(
+  decl: FunctionDeclaration,
+  env: Environment
+): RuntimeVal {
+  const fnVal: FunctionVal = {
+    type: "function",
+    parameters: decl.parameters,
+    body: decl.body,
+    closure: env,
+  };
+  // Declare as constant
+  env.declareVar(decl.name, fnVal, true);
+  return fnVal;
 }
 
-// Evaluate indexing expression: target[index]
-function evalIndexExpr(node: IndexExpression, env: Environment): RuntimeVal {
-  const targetVal = evaluate(node.target, env);
-  const indexVal = evaluate(node.index, env);
-
-  // List indexing
-  if (targetVal.type === "list") {
-    if (indexVal.type !== "number") {
-      throw new Error("List index must be a number");
-    }
-    const idx = indexVal.value;
-    if (!Number.isInteger(idx) || idx < 0 || idx >= targetVal.elements.length) {
-      throw new Error(`List index out of bounds: ${idx}`);
-    }
-    return targetVal.elements[idx];
-  }
-
-  // String indexing: return substring of length 1
-  if (targetVal.type === "string") {
-    if (indexVal.type !== "number") {
-      throw new Error("String index must be a number");
-    }
-    const idx = indexVal.value;
-    if (!Number.isInteger(idx) || idx < 0 || idx >= targetVal.value.length) {
-      throw new Error(`String index out of bounds: ${idx}`);
-    }
-    const ch = targetVal.value.charAt(idx);
-    return { type: "string", value: ch };
-  }
-
-  // Map indexing: shorthand for get(map, key)
-  if (targetVal.type === "map") {
-    let keyStr: string;
-    if (indexVal.type === "string") {
-      keyStr = indexVal.value;
-    } else if (indexVal.type === "number" || indexVal.type === "boolean") {
-      keyStr = String(indexVal.value);
-    } else {
-      throw new Error("Map key must be string/number/boolean");
-    }
-    if (targetVal.map.has(keyStr)) {
-      return targetVal.map.get(keyStr)!;
-    }
-    return NULL;
-  }
-
-  throw new Error("Cannot index into non-list/string/map");
+function evalFunctionExpression(
+  expr: FunctionExpression,
+  env: Environment
+): RuntimeVal {
+  // Create a function value capturing current env
+  const fnVal: FunctionVal = {
+    type: "function",
+    parameters: expr.parameters,
+    body: expr.body,
+    closure: env,
+  };
+  return fnVal;
 }
 
-// Evaluate unary expression: ! or -
-function evalUnaryExpr(unop: UnaryExpression, env: Environment): RuntimeVal {
-  const right = evaluate(unop.right, env);
-  switch (unop.operator) {
+function evalReturnStatement(stmt: ReturnStatement, env: Environment): never {
+  // Evaluate the returned expression, then throw ReturnSignal
+  const val = evaluate(stmt.value, env);
+  throw new ReturnSignal(val);
+}
+
+function evalIfStatement(stmt: IfStatement, env: Environment): RuntimeVal {
+  const condVal = evaluate(stmt.condition, env);
+  if (condVal.type !== "boolean") {
+    throw new Error("Condition in if must be boolean");
+  }
+  if (condVal.value) {
+    // New scope for then-branch
+    return evaluate(stmt.thenBranch, new Environment(env));
+  } else if (stmt.elseBranch) {
+    return evaluate(stmt.elseBranch, new Environment(env));
+  }
+  return NULL_VAL;
+}
+
+function evalWhileStatement(
+  stmt: WhileStatement,
+  env: Environment
+): RuntimeVal {
+  while (true) {
+    const condVal = evaluate(stmt.condition, env);
+    if (condVal.type !== "boolean") {
+      throw new Error("Condition in while must be boolean");
+    }
+    if (!condVal.value) break;
+    // Evaluate body in new scope; if a ReturnSignal is thrown, it propagates out
+    evaluate(stmt.body, new Environment(env));
+  }
+  return NULL_VAL;
+}
+
+function evalForStatement(stmt: ForStatement, env: Environment): RuntimeVal {
+  const iterableVal = evaluate(stmt.range, env);
+
+  if (iterableVal.type === "list") {
+    for (const item of (iterableVal as ListVal).elements) {
+      const loopEnv = new Environment(env);
+      loopEnv.declareVar(stmt.iterator, item, false);
+      evaluate(stmt.body, loopEnv);
+    }
+  } else if (iterableVal.type === "string") {
+    for (const ch of (iterableVal as StringVal).value) {
+      const charVal: RuntimeVal = { type: "string", value: ch };
+      const loopEnv = new Environment(env);
+      loopEnv.declareVar(stmt.iterator, charVal, false);
+      evaluate(stmt.body, loopEnv);
+    }
+  } else if (iterableVal.type === "map") {
+    for (const key of (iterableVal as MapVal).entries.keys()) {
+      const keyVal: RuntimeVal = { type: "string", value: key };
+      const loopEnv = new Environment(env);
+      loopEnv.declareVar(stmt.iterator, keyVal, false);
+      evaluate(stmt.body, loopEnv);
+    }
+  } else {
+    throw new Error("For-loop expects a list, string, or map");
+  }
+  return NULL_VAL;
+}
+
+// ─── Expression evaluation ───────────────────────────────────────
+
+function evalIdentifier(id: Identifier, env: Environment): RuntimeVal {
+  return env.lookupVar(id.symbol);
+}
+
+function evalUnary(expr: UnaryExpression, env: Environment): RuntimeVal {
+  const rightVal = evaluate(expr.right, env);
+  switch (expr.operator) {
     case "-":
-      if (right.type !== "number") {
+      if (rightVal.type !== "number") {
         throw new Error("Unary '-' expects a number");
       }
-      return { type: "number", value: -right.value };
+      return { type: "number", value: -(rightVal as NumberVal).value };
     case "!":
-      if (right.type !== "boolean") {
+      if (rightVal.type !== "boolean") {
         throw new Error("Unary '!' expects a boolean");
       }
-      return { type: "boolean", value: !right.value };
+      return { type: "boolean", value: !(rightVal as BooleanVal).value };
     default:
-      throw new Error(`Unsupported unary operator: ${unop.operator}`);
+      throw new Error(`Unsupported unary operator: ${expr.operator}`);
   }
 }
 
-// Evaluate binary expression with extended support
-function evalBinaryExpr(binop: BinaryExpression, env: Environment): RuntimeVal {
-  const left = evaluate(binop.left, env);
-  const right = evaluate(binop.right, env);
-  const op = binop.operator;
+function evalBinary(expr: BinaryExpression, env: Environment): RuntimeVal {
+  const leftVal = evaluate(expr.left, env);
+  const rightVal = evaluate(expr.right, env);
+  const op = expr.operator;
 
-  // Number-number operations
-  if (left.type === "number" && right.type === "number") {
-    const l = left.value;
-    const r = right.value;
+  // Number operations
+  if (leftVal.type === "number" && rightVal.type === "number") {
+    const l = (leftVal as NumberVal).value;
+    const r = (rightVal as NumberVal).value;
     switch (op) {
       case "+":
         return { type: "number", value: l + r };
@@ -188,292 +348,215 @@ function evalBinaryExpr(binop: BinaryExpression, env: Environment): RuntimeVal {
     }
   }
 
-  // String concatenation with primitives only: "foo" + 5 => "foo5", etc.
-  if (op === "+") {
-    if (left.type === "string" || right.type === "string") {
-      let lstr: string;
-      if (left.type === "string") {
-        lstr = left.value;
-      } else if (left.type === "number" || left.type === "boolean") {
-        lstr = String(left.value);
-      } else {
-        throw new Error(`Cannot concatenate type '${left.type}' to string`);
-      }
-      let rstr: string;
-      if (right.type === "string") {
-        rstr = right.value;
-      } else if (right.type === "number" || right.type === "boolean") {
-        rstr = String(right.value);
-      } else {
-        throw new Error(`Cannot concatenate type '${right.type}' to string`);
-      }
+  // String concatenation or comparison
+  if (leftVal.type === "string" || rightVal.type === "string") {
+    if (op === "+") {
+      const lstr =
+        leftVal.type === "string"
+          ? (leftVal as StringVal).value
+          : String((leftVal as any).value);
+      const rstr =
+        rightVal.type === "string"
+          ? (rightVal as StringVal).value
+          : String((rightVal as any).value);
       return { type: "string", value: lstr + rstr };
     }
-  }
-
-  // Boolean-boolean operations
-  if (left.type === "boolean" && right.type === "boolean") {
-    switch (op) {
-      case "&&":
-        return { type: "boolean", value: left.value && right.value };
-      case "||":
-        return { type: "boolean", value: left.value || right.value };
-      case "==":
-        return { type: "boolean", value: left.value === right.value };
-      case "!=":
-        return { type: "boolean", value: left.value !== right.value };
+    if (leftVal.type === "string" && rightVal.type === "string") {
+      const lstr = (leftVal as StringVal).value;
+      const rstr = (rightVal as StringVal).value;
+      switch (op) {
+        case "==":
+          return { type: "boolean", value: lstr === rstr };
+        case "!=":
+          return { type: "boolean", value: lstr !== rstr };
+        case "<":
+          return { type: "boolean", value: lstr < rstr };
+        case "<=":
+          return { type: "boolean", value: lstr <= rstr };
+        case ">":
+          return { type: "boolean", value: lstr > rstr };
+        case ">=":
+          return { type: "boolean", value: lstr >= rstr };
+      }
     }
   }
 
-  // List concatenation: list + list
-  if (op === "+" && left.type === "list" && right.type === "list") {
+  // Boolean operations
+  if (leftVal.type === "boolean" && rightVal.type === "boolean") {
+    const lb = (leftVal as BooleanVal).value;
+    const rb = (rightVal as BooleanVal).value;
+    switch (op) {
+      case "and":
+      case "&&":
+        return { type: "boolean", value: lb && rb };
+      case "or":
+      case "||":
+        return { type: "boolean", value: lb || rb };
+      case "==":
+        return { type: "boolean", value: lb === rb };
+      case "!=":
+        return { type: "boolean", value: lb !== rb };
+    }
+  }
+
+  // List concatenation
+  if (op === "+" && leftVal.type === "list" && rightVal.type === "list") {
     return {
       type: "list",
-      elements: [...left.elements, ...right.elements],
+      elements: [
+        ...(leftVal as ListVal).elements,
+        ...(rightVal as ListVal).elements,
+      ],
     };
   }
 
-  // Map merging: map + map
-  if (op === "+" && left.type === "map" && right.type === "map") {
-    const mergedMap = new Map<string, RuntimeVal>();
-    for (const [k, v] of left.map) {
-      mergedMap.set(k, v);
-    }
-    for (const [k, v] of right.map) {
-      mergedMap.set(k, v);
-    }
-    return { type: "map", map: mergedMap };
+  // Map merging
+  if (op === "+" && leftVal.type === "map" && rightVal.type === "map") {
+    const merged = new Map<string, RuntimeVal>();
+    for (const [k, v] of (leftVal as MapVal).entries) merged.set(k, v);
+    for (const [k, v] of (rightVal as MapVal).entries) merged.set(k, v);
+    return { type: "map", entries: merged };
   }
 
-  // String comparisons lexically: "a" < "b", etc.
-  if (
-    left.type === "string" &&
-    right.type === "string" &&
-    ["==", "!=", "<", "<=", ">", ">="].includes(op)
-  ) {
-    const lstr = left.value;
-    const rstr = right.value;
-    switch (op) {
-      case "==":
-        return { type: "boolean", value: lstr === rstr };
-      case "!=":
-        return { type: "boolean", value: lstr !== rstr };
-      case "<":
-        return { type: "boolean", value: lstr < rstr };
-      case "<=":
-        return { type: "boolean", value: lstr <= rstr };
-      case ">":
-        return { type: "boolean", value: lstr > rstr };
-      case ">=":
-        return { type: "boolean", value: lstr >= rstr };
-    }
-  }
-
-  // If none matched, unsupported combination
   throw new Error(
-    `Unsupported binary operation: ${op} on types ${left.type} and ${right.type}`
+    `Unsupported operation '${op}' on types ${leftVal.type} and ${rightVal.type}`
   );
 }
 
-// Evaluate variable declaration
-function evalVarDeclaration(
-  decl: any /* VarDeclaration */,
+function evalAssignment(
+  expr: AssignmentExpression,
   env: Environment
 ): RuntimeVal {
-  const value = evaluate(decl.value, env);
-  if (decl.varType) {
-    enforceType(value, decl.varType);
+  const value = evaluate(expr.value, env);
+
+  // assignee can be Identifier or IndexExpression
+  if (isIdentifier(expr.assignee)) {
+    return env.assignVar(expr.assignee.symbol, value);
   }
-  env.declareVar(decl.identifier, value, decl.isFinal ?? false);
-  return value;
+  if (isIndexExpression(expr.assignee)) {
+    const idxExpr = expr.assignee;
+    const targetVal = evaluate(idxExpr.target, env);
+    const indexVal = evaluate(idxExpr.index, env);
+
+    // List assignment
+    if (targetVal.type === "list") {
+      if (indexVal.type !== "number") {
+        throw new Error("List index must be a number");
+      }
+      const idx = (indexVal as NumberVal).value;
+      const arr = (targetVal as ListVal).elements;
+      if (!Number.isInteger(idx) || idx < 0 || idx >= arr.length) {
+        throw new Error(`List index out of bounds: ${idx}`);
+      }
+      arr[idx] = value;
+      return value;
+    }
+    // Map assignment
+    if (targetVal.type === "map") {
+      let keyStr: string;
+      if (
+        indexVal.type === "string" ||
+        indexVal.type === "number" ||
+        indexVal.type === "boolean"
+      ) {
+        keyStr = String((indexVal as any).value);
+      } else {
+        throw new Error("Map key must be string/number/boolean");
+      }
+      (targetVal as MapVal).entries.set(keyStr, value);
+      return value;
+    }
+    throw new Error("Invalid assignment target");
+  }
+  throw new Error("Invalid assignment target");
 }
 
-// Evaluate identifier: look up in environment
-function evalIdentifier(id: Identifier, env: Environment): RuntimeVal {
-  return env.lookupVar(id.symbol);
-}
+function evalCall(expr: CallExpression, env: Environment): RuntimeVal {
+  const calleeVal = evaluate(expr.caller, env);
+  const argVals = expr.arguments.map((arg) => evaluate(arg, env));
 
-// Evaluate function declaration: bind in env
-function evalFunctionDeclaration(
-  func: FunctionDeclaration,
-  env: Environment
-): RuntimeVal {
-  const funcVal: FunctionVal = {
-    type: "function",
-    parameters: func.parameters,
-    body: func.body,
-    closure: env,
-  };
-  env.declareVar(func.name, funcVal, true);
-  return funcVal;
-}
-
-// Evaluate function expression: create closure
-function evalFunctionExpression(
-  func: FunctionExpression,
-  env: Environment
-): RuntimeVal {
-  const funcVal: FunctionVal = {
-    type: "function",
-    parameters: func.parameters,
-    body: func.body,
-    closure: env,
-  };
-  return funcVal;
-}
-
-// Evaluate call expression
-function evalCallExpression(
-  expr: CallExpression,
-  env: Environment
-): RuntimeVal {
-  const fnVal = evaluate(expr.caller, env);
-  const args = expr.arguments.map((arg) => evaluate(arg, env));
-  if (fnVal.type === "builtin") {
-    return fnVal.call(args, env);
-  } else if (fnVal.type === "function") {
-    const scope = new Environment(fnVal.closure);
+  if (calleeVal.type === "builtin-function") {
+    return (calleeVal as BuiltinFunctionVal).call(argVals, env);
+  }
+  if (calleeVal.type === "function") {
+    const fn = calleeVal as FunctionVal;
+    const callEnv = new Environment(fn.closure);
     // Bind parameters
-    for (let i = 0; i < fnVal.parameters.length; i++) {
-      const paramName = fnVal.parameters[i];
-      const argVal = args[i];
-      scope.declareVar(paramName, argVal, false);
+    for (let i = 0; i < fn.parameters.length; i++) {
+      const param: Parameter = fn.parameters[i];
+      const argVal = argVals[i] ?? NULL_VAL;
+      if (param.paramType) {
+        enforceType(argVal, param.paramType);
+      }
+      callEnv.declareVar(param.name, argVal, false, param.paramType);
     }
-    // Execute function body
-    return evalBlock(fnVal.body, scope);
-  } else {
-    throw new Error("Tried to call non-function");
-  }
-}
-
-// Evaluate if statement
-function evalIfStatement(stmt: IfStatement, env: Environment): RuntimeVal {
-  const cond = evaluate(stmt.condition, env);
-  if (cond.type !== "boolean") {
-    throw new Error("Condition must be boolean");
-  }
-  if (cond.value) {
-    return evaluate(stmt.thenBranch, env);
-  } else if (stmt.elseBranch) {
-    return evaluate(stmt.elseBranch, env);
-  }
-  return NULL;
-}
-
-// Evaluate while statement
-function evalWhileStatement(
-  stmt: WhileStatement,
-  env: Environment
-): RuntimeVal {
-  let result: RuntimeVal = NULL;
-  while (true) {
-    const cond = evaluate(stmt.condition, env);
-    if (cond.type !== "boolean") {
-      throw new Error("Condition must be boolean");
+    // Execute body: catch ReturnSignal here
+    try {
+      return evaluate(fn.body, callEnv);
+    } catch (e) {
+      if (e instanceof ReturnSignal) {
+        return e.value;
+      }
+      throw e;
     }
-    if (!cond.value) break;
-    result = evaluate(stmt.body, env);
   }
-  return result;
+  throw new Error("Attempt to call non-function value");
 }
 
-// Evaluate for statement: iterate over list
-function evalForStatement(stmt: ForStatement, env: Environment): RuntimeVal {
-  const iterable = evaluate(stmt.range, env);
-  if (iterable.type !== "list") {
-    throw new Error("For-loop expects a list");
+function evalIndex(expr: IndexExpression, env: Environment): RuntimeVal {
+  const targetVal = evaluate(expr.target, env);
+  const indexVal = evaluate(expr.index, env);
+
+  if (targetVal.type === "list") {
+    if (indexVal.type !== "number") {
+      throw new Error("List index must be a number");
+    }
+    const idx = (indexVal as NumberVal).value;
+    const arr = (targetVal as ListVal).elements;
+    if (!Number.isInteger(idx) || idx < 0 || idx >= arr.length) {
+      throw new Error(`List index out of bounds: ${idx}`);
+    }
+    return arr[idx];
   }
-  for (const item of iterable.elements) {
-    const scope = new Environment(env);
-    scope.declareVar(stmt.iterator, item, false);
-    evaluate(stmt.body, scope);
+  if (targetVal.type === "string") {
+    if (indexVal.type !== "number") {
+      throw new Error("String index must be a number");
+    }
+    const idx = (indexVal as NumberVal).value;
+    const s = (targetVal as StringVal).value;
+    if (!Number.isInteger(idx) || idx < 0 || idx >= s.length) {
+      throw new Error(`String index out of bounds: ${idx}`);
+    }
+    return { type: "string", value: s.charAt(idx) };
   }
-  return NULL;
+  if (targetVal.type === "map") {
+    let keyStr: string;
+    if (
+      indexVal.type === "string" ||
+      indexVal.type === "number" ||
+      indexVal.type === "boolean"
+    ) {
+      keyStr = String((indexVal as any).value);
+    } else {
+      throw new Error("Map key must be string/number/boolean");
+    }
+    const entry = (targetVal as MapVal).entries.get(keyStr);
+    return entry !== undefined ? entry : NULL_VAL;
+  }
+  throw new Error("Cannot index into non-list/string/map");
 }
 
-// Evaluate return statement
-function evalReturnStatement(
-  stmt: ReturnStatement,
-  env: Environment
-): RuntimeVal {
-  return evaluate(stmt.value, env);
+function evalListLiteral(node: ListLiteral, env: Environment): RuntimeVal {
+  const elems = node.elements.map((el) => evaluate(el, env));
+  return { type: "list", elements: elems };
 }
 
-// ─── Main evaluate dispatch ───────────────────────────────────────────────────
-
-export function evaluate(
-  astNode: Statement | Expression | Program,
-  env: Environment
-): RuntimeVal {
-  switch (astNode.kind) {
-    case "Program":
-      return evalProgram(astNode as Program, env);
-
-    case "Block":
-      return evalBlock(astNode as BlockStatement, env);
-
-    case "ExpressionStatement":
-      return evaluate((astNode as any).expression, env);
-
-    case "NumericLiteral":
-      return { type: "number", value: (astNode as NumericLiteral).value };
-
-    case "StringLiteral":
-      return { type: "string", value: (astNode as StringLiteral).value };
-
-    case "BooleanLiteral":
-      return { type: "boolean", value: (astNode as BooleanLiteral).value };
-
-    case "ListLiteral":
-      return evalListLiteral(astNode as ListLiteral, env);
-
-    case "MapLiteral":
-      return evalMapLiteral(astNode as MapLiteral, env);
-
-    case "Identifier":
-      return evalIdentifier(astNode as Identifier, env);
-
-    case "VarDeclaration":
-      return evalVarDeclaration(astNode as any, env);
-
-    case "FunctionDeclaration":
-      return evalFunctionDeclaration(astNode as FunctionDeclaration, env);
-
-    case "FunctionExpression":
-      return evalFunctionExpression(astNode as FunctionExpression, env);
-
-    case "CallExpr":
-      return evalCallExpression(astNode as CallExpression, env);
-
-    case "BinaryExpr":
-      return evalBinaryExpr(astNode as BinaryExpression, env);
-
-    case "UnaryExpression":
-      return evalUnaryExpr(astNode as UnaryExpression, env);
-
-    case "IfStatement":
-      return evalIfStatement(astNode as IfStatement, env);
-
-    case "WhileStatement":
-      return evalWhileStatement(astNode as WhileStatement, env);
-
-    case "ForStatement":
-      return evalForStatement(astNode as ForStatement, env);
-
-    case "ReturnStatement":
-      return evalReturnStatement(astNode as ReturnStatement, env);
-
-    case "AssignmentExpr":
-      // Evaluate right-hand side, then assign to variable
-      const assignNode = astNode as AssignmentExpression;
-      const val = evaluate(assignNode.value, env);
-      env.assignVar(assignNode.assignee.symbol, val);
-      return val;
-
-    case "IndexExpr":
-      return evalIndexExpr(astNode as IndexExpression, env);
-
-    default:
-      throw new Error(`Unknown AST node kind: ${(astNode as any).kind}`);
+function evalMapLiteral(node: MapLiteral, env: Environment): RuntimeVal {
+  const m = new Map<string, RuntimeVal>();
+  for (const entry of node.entries) {
+    // entry.key is parser-enforced string literal
+    const val = evaluate(entry.value, env);
+    m.set(entry.key, val);
   }
+  return { type: "map", entries: m };
 }
